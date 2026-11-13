@@ -58,7 +58,6 @@
 
       if (!name || name.length < 2) return;
 
-      // اقتراح مبدئي فقط؛ لا يعتمد دون مراجعة المستخدم.
       const unitPrice = values[values.length - 1];
       const paidQty = values.length >= 3
         ? values[values.length - 2]
@@ -211,9 +210,13 @@
           candidate[key] == null ? '' : String(candidate[key]);
 
         input.addEventListener('input', () => {
-          candidate[key] = type === 'number'
-            ? Number(input.value)
-            : input.value;
+          if (type === 'number') {
+            candidate[key] = input.value.trim() === ''
+              ? null
+              : Number(input.value);
+          } else {
+            candidate[key] = input.value;
+          }
         });
 
         wrapper.append(fieldLabel, input);
@@ -399,6 +402,8 @@
         Number(item.paidQty) > 0 &&
         Number.isSafeInteger(Number(item.bonusQty)) &&
         Number(item.bonusQty) >= 0 &&
+        item.unitPrice !== null &&
+        item.unitPrice !== '' &&
         Number.isFinite(Number(item.unitPrice)) &&
         Number(item.unitPrice) >= 0
       );
@@ -446,7 +451,6 @@
     getSelectedFiles: () => selectedFiles.slice()
   });
 
-  // تشغيل OCR تلقائياً بعد تجهيز الصفحة.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, {
       once: true
