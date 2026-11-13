@@ -106,9 +106,7 @@
         if (tx) {
           try {
             tx.abort();
-          } catch (_) {
-            // لا يوجد إجراء إضافي
-          }
+          } catch (_) {}
         }
 
         reject(error);
@@ -136,7 +134,9 @@
       const tx = db.transaction(storeName, 'readonly');
       const request = tx.objectStore(storeName).getAll();
 
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
 
       request.onerror = () => {
         reject(request.error || new Error('تعذر قراءة البيانات.'));
@@ -149,8 +149,13 @@
   }
 
   function add(storeName, value) {
-    if (!STORE_NAMES.includes(storeName) || storeName === 'settings') {
-      return Promise.reject(new Error('اسم مخزن البيانات غير صالح لهذه العملية.'));
+    if (
+      !STORE_NAMES.includes(storeName) ||
+      storeName === 'settings'
+    ) {
+      return Promise.reject(
+        new Error('اسم مخزن البيانات غير صالح لهذه العملية.')
+      );
     }
 
     return openDatabase().then(db => new Promise((resolve, reject) => {
@@ -269,6 +274,34 @@
     return typeof value === 'number' && Number.isFinite(value);
   }
 
+  function isValidDate(value) {
+    return (
+      typeof value === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      !Number.isNaN(Date.parse(value + 'T00:00:00'))
+    );
+  }
+
+  function validCategory(value) {
+    return value === 'medicine' || value === 'general';
+  }
+
+  function getAllocationAmount(allocation) {
+    if (isValidNumber(allocation)) {
+      return allocation;
+    }
+
+    if (
+      allocation &&
+      typeof allocation === 'object' &&
+      isValidNumber(allocation.amount)
+    ) {
+      return allocation.amount;
+    }
+
+    return null;
+  }
+
   function validateBackup(backup) {
     if (
       !backup ||
@@ -277,27 +310,32 @@
       !backup.data ||
       typeof backup.data !== 'object'
     ) {
-      throw new Error('ملف النسخة الاحتياطية غير صالح أو لا يخص هذا التطبيق.');
+      throw new Error(
+        'ملف النسخة الاحتياطية غير صالح أو لا يخص هذا التطبيق.'
+      );
     }
 
     for (const name of STORE_NAMES) {
       if (!Array.isArray(backup.data[name])) {
-        throw new Error('ملف النسخة الاحتياطية ناقص أو تالف: ' + name);
+        throw new Error(
+          'ملف النسخة الاحتياطية ناقص أو تالف: ' + name
+        );
       }
     }
 
-    const validCategories = new Set(['medicine', 'general']);
-
+    // التحقق من الفواتير.
     backup.data.invoices.forEach(invoice => {
       if (
         !invoice ||
-        !validCategories.has(invoice.category) ||
+        !validCategory(invoice.category) ||
         !Array.isArray(invoice.items) ||
         !isValidNumber(invoice.total) ||
         invoice.total < 0 ||
-        typeof invoice.date !== 'string'
+        !isValidDate(invoice.date)
       ) {
-        throw new Error('توجد فاتورة غير صالحة داخل النسخة الاحتياطية.');
+        throw new Error(
+          'توجد فاتورة غير صالحة داخل النسخة الاحتياطية.'
+        );
       }
 
       invoice.items.forEach(item => {
@@ -316,37 +354,89 @@
           !isValidNumber(item.itemTotal) ||
           item.itemTotal < 0
         ) {
-          throw new Error('يوجد صنف غير صالح داخل إحدى الفواتير.');
+          throw new Error(
+            'يوجد صنف غير صالح داخل إحدى الفواتير.'
+          );
         }
       });
     });
 
+    // التحقق من المردودات.
     backup.data.returns.forEach(item => {
       if (
         !item ||
-        !validCategories.has(item.category) ||
+        !validCategory(item.category) ||
         !isValidNumber(item.amount) ||
         item.amount <= 0 ||
-        typeof item.date !== 'string'
+        !isValidDate(item.date)
       ) {
-        throw new Error('يوجد مردود غير صالح داخل النسخة الاحتياطية.');
+        throw new Error(
+          'يوجد مردود غير صالح داخل النسخة الاحتياطية.'
+        );
       }
     });
 
+    // التحقق من التسديدات، مع دعم الشكل القديم والجديد.
     backup.data.payments.forEach(item => {
       if (
         !item ||
         !isValidNumber(item.amount) ||
         item.amount <= 0 ||
+        !isValidDate(item.date) ||
         !item.allocations ||
-        !isValidNumber(item.allocations.medicine) ||
-        !isValidNumber(item.allocations.general) ||
-        !item.discountSnapshot
+        typeof item.allocations !== 'object'
       ) {
-        throw new Error('يوجد تسديد غير صالح داخل النسخة الاحتياطية.');
+        throw new Error(
+          'يوجد تسديد غير صالح داخل النسخة الاحتياطية.'
+        );
+      }
+
+      const medicine = getAllocationAmount(
+        item.allocations.medicine
+      );
+
+      const general = getAllocationAmount(
+        item.allocations.general
+      );
+
+      if (
+        medicine === null ||
+        general === null ||
+        medicine < 0 ||
+        general < 0
+      ) {
+        throw new Error(
+          'توزيع أحد التسديدات غير صالح داخل النسخة الاحتياطية.'
+        );
+      }
+
+      if (Math.abs(roundNumber(medicine + general) - item.amount) > 0.02) {
+        throw new Error(
+          'مجموع توزيع أحد التسديدات لا يطابق مبلغ التسديد.'
+        );
+      }
+
+      // يدعم discountSnapshot أو discounts في السجلات القديمة.
+      const snapshot = item.discountSnapshot || item.discounts;
+
+      if (
+        snapshot &&
+        (
+          !isValidNumber(Number(snapshot.medicine)) ||
+          !isValidNumber(Number(snapshot.general)) ||
+          Number(snapshot.medicine) < 0 ||
+          Number(snapshot.medicine) > 100 ||
+          Number(snapshot.general) < 0 ||
+          Number(snapshot.general) > 100
+        )
+      ) {
+        throw new Error(
+          'نسب الخصم في أحد التسديدات غير صالحة.'
+        );
       }
     });
 
+    // التحقق من الإعدادات.
     backup.data.settings.forEach(item => {
       if (
         !item ||
@@ -354,37 +444,61 @@
         !item.key.trim() ||
         !Object.prototype.hasOwnProperty.call(item, 'value')
       ) {
-        throw new Error('يوجد إعداد غير صالح داخل النسخة الاحتياطية.');
+        throw new Error(
+          'يوجد إعداد غير صالح داخل النسخة الاحتياطية.'
+        );
       }
     });
   }
 
+  function roundNumber(value) {
+    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  }
+
   async function importBackup(backup) {
+    // لا يتم مسح أي بيانات قبل اجتياز جميع اختبارات النسخة.
     validateBackup(backup);
 
     const db = await openDatabase();
 
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAMES, 'readwrite');
+      let tx;
 
-      STORE_NAMES.forEach(name => {
-        const store = tx.objectStore(name);
+      try {
+        tx = db.transaction(STORE_NAMES, 'readwrite');
 
-        store.clear();
+        STORE_NAMES.forEach(name => {
+          const store = tx.objectStore(name);
 
-        backup.data[name].forEach(record => {
-          store.put(record);
+          store.clear();
+
+          backup.data[name].forEach(record => {
+            store.put(record);
+          });
         });
-      });
+      } catch (error) {
+        if (tx) {
+          try {
+            tx.abort();
+          } catch (_) {}
+        }
+
+        reject(error);
+        return;
+      }
 
       tx.oncomplete = () => resolve(true);
 
       tx.onerror = () => {
-        reject(tx.error || new Error('فشلت استعادة النسخة الاحتياطية.'));
+        reject(
+          tx.error || new Error('فشلت استعادة النسخة الاحتياطية.')
+        );
       };
 
       tx.onabort = () => {
-        reject(tx.error || new Error('تم إلغاء استعادة النسخة الاحتياطية.'));
+        reject(
+          tx.error || new Error('تم إلغاء استعادة النسخة الاحتياطية.')
+        );
       };
     });
   }
