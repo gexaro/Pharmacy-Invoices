@@ -809,3 +809,27 @@ body.dark-theme .primary-button {
     transition-duration: .01ms !important;
   }
 }
+/* Hide dashboard overview on secondary pages */
+body:has(
+  #page-return.active,
+  #page-payment.active,
+  #page-reports.active,
+  #page-archive.active,
+  #page-settings.active
+) .welcome-section,
+body:has(
+  #page-return.active,
+  #page-payment.active,
+  #page-reports.active,
+  #page-archive.active,
+  #page-settings.active
+) .summary-grid,
+body:has(
+  #page-return.active,
+  #page-payment.active,
+  #page-reports.active,
+  #page-archive.active,
+  #page-settings.active
+) .main-content > .section-block {
+  display: none !important;
+}
