@@ -2,15 +2,26 @@
 (function () {
   'use strict';
 
-  let app = null;
   let selectedFiles = [];
   let worker = null;
   let lastCandidates = [];
   let lastRawText = '';
 
+  const $ = id => document.getElementById(id);
+
+  function toast(message) {
+    if (window.PharmacyApp?.toast) {
+      window.PharmacyApp.toast(message);
+    } else {
+      alert(message);
+    }
+  }
+
   function parseNumber(value) {
     const normalized = String(value)
-      .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+      .replace(/[٠-٩]/g, digit =>
+        String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
+      )
       .replace(/[٬،]/g, ',')
       .replace(/٫/g, '.')
       .replace(/,/g, '');
@@ -20,14 +31,23 @@
   }
 
   function extractCandidates(text) {
-    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const lines = text
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+
     const candidates = [];
 
     lines.forEach(line => {
-      const matches = line.match(/[0-9٠-٩]+(?:[.,٬٫][0-9٠-٩]+)*/g) || [];
+      const matches =
+        line.match(/[0-9٠-٩]+(?:[.,٬٫][0-9٠-٩]+)*/g) || [];
+
       if (matches.length < 2) return;
 
-      const values = matches.map(parseNumber).filter(value => value !== null);
+      const values = matches
+        .map(parseNumber)
+        .filter(value => value !== null);
+
       if (values.length < 2) return;
 
       const name = line
@@ -38,19 +58,24 @@
 
       if (!name || name.length < 2) return;
 
-      const unitPrice = values.length >= 3
-        ? values[values.length - 2]
-        : values[values.length - 1];
-
+      // اقتراح مبدئي فقط؛ لا يعتمد دون مراجعة المستخدم.
+      const unitPrice = values[values.length - 1];
       const paidQty = values.length >= 3
-        ? values[values.length - 3]
-        : values[values.length - 2];
+        ? values[values.length - 2]
+        : values[0];
 
-      if (!(paidQty > 0) || !(unitPrice >= 0)) return;
+      if (
+        !Number.isInteger(paidQty) ||
+        paidQty <= 0 ||
+        !Number.isFinite(unitPrice) ||
+        unitPrice < 0
+      ) {
+        return;
+      }
 
       candidates.push({
         name,
-        paidQty: Math.floor(paidQty),
+        paidQty,
         bonusQty: 0,
         unitPrice,
         sourceLine: line
@@ -61,21 +86,41 @@
   }
 
   function setProgress(percent, status) {
-    const area = document.getElementById('ocrProgressArea');
-    const bar = document.getElementById('ocrProgressBar');
-    const percentText = document.getElementById('ocrProgressPercent');
-    const statusText = document.getElementById('ocrStatusText');
+    const area = $('ocrProgressArea');
+    const bar = $('ocrProgressBar');
+    const percentText = $('ocrProgressPercent');
+    const statusText = $('ocrStatusText');
 
     if (area) area.hidden = false;
-    if (bar) bar.style.width = Math.max(0, Math.min(100, percent)) + '%';
-    if (percentText) percentText.textContent = Math.round(percent) + '%';
-    if (statusText) statusText.textContent = status || 'جارٍ قراءة الصورة...';
+    if (bar) {
+      bar.style.width =
+        Math.max(0, Math.min(100, percent)) + '%';
+    }
+
+    if (percentText) {
+      percentText.textContent = Math.round(percent) + '%';
+    }
+
+    if (statusText) {
+      statusText.textContent = status || 'جارٍ قراءة الصورة...';
+    }
+  }
+
+  function showError(message) {
+    const error = $('ocrError');
+
+    if (error) {
+      error.textContent = message;
+      error.hidden = false;
+    } else {
+      toast(message);
+    }
   }
 
   function renderSelectedImages() {
-    const preview = document.getElementById('ocrImagePreview');
-    const list = document.getElementById('ocrImageList');
-    const runButton = document.getElementById('runOcrBtn');
+    const preview = $('ocrImagePreview');
+    const list = $('ocrImageList');
+    const runButton = $('runOcrBtn');
 
     if (!preview || !list || !runButton) return;
 
@@ -100,10 +145,10 @@
   }
 
   function renderReview() {
-    const panel = document.getElementById('ocrReviewPanel');
-    const list = document.getElementById('ocrReviewList');
-    const count = document.getElementById('ocrDetectedCount');
-    const raw = document.getElementById('ocrRawText');
+    const panel = $('ocrReviewPanel');
+    const list = $('ocrReviewList');
+    const count = $('ocrDetectedCount');
+    const raw = $('ocrRawText');
 
     if (!panel || !list) return;
 
@@ -123,7 +168,10 @@
       remove.type = 'button';
       remove.className = 'remove-item';
       remove.textContent = '×';
-      remove.setAttribute('aria-label', 'حذف الصنف من نتائج القراءة');
+      remove.setAttribute(
+        'aria-label',
+        'حذف الصنف من نتائج القراءة'
+      );
 
       remove.addEventListener('click', () => {
         lastCandidates.splice(index, 1);
@@ -146,8 +194,8 @@
         const wrapper = document.createElement('label');
         wrapper.className = 'field';
 
-        const text = document.createElement('span');
-        text.textContent = caption;
+        const fieldLabel = document.createElement('span');
+        fieldLabel.textContent = caption;
 
         const input = document.createElement('input');
         input.type = type;
@@ -155,10 +203,12 @@
         if (type === 'number') {
           input.min = key === 'paidQty' ? '1' : '0';
           input.step = key === 'unitPrice' ? 'any' : '1';
-          input.inputMode = key === 'unitPrice' ? 'decimal' : 'numeric';
+          input.inputMode =
+            key === 'unitPrice' ? 'decimal' : 'numeric';
         }
 
-        input.value = candidate[key] == null ? '' : String(candidate[key]);
+        input.value =
+          candidate[key] == null ? '' : String(candidate[key]);
 
         input.addEventListener('input', () => {
           candidate[key] = type === 'number'
@@ -166,7 +216,7 @@
             : input.value;
         });
 
-        wrapper.append(text, input);
+        wrapper.append(fieldLabel, input);
         grid.append(wrapper);
       });
 
@@ -174,15 +224,23 @@
       list.append(card);
     });
 
-    if (count) count.textContent = lastCandidates.length + ' أصناف مقترحة';
+    if (count) {
+      count.textContent = lastCandidates.length + ' أصناف مقترحة';
+    }
+
     if (raw) raw.textContent = lastRawText;
 
     panel.hidden = false;
   }
 
   async function recognizeImages() {
-    if (!window.Tesseract || typeof window.Tesseract.createWorker !== 'function') {
-      throw new Error('تعذر تحميل محرك OCR. تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.');
+    if (
+      !window.Tesseract ||
+      typeof window.Tesseract.createWorker !== 'function'
+    ) {
+      throw new Error(
+        'تعذر تحميل محرك OCR. تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.'
+      );
     }
 
     if (!selectedFiles.length) {
@@ -194,72 +252,95 @@
 
     let totalText = '';
 
-    worker = await window.Tesseract.createWorker('ara+eng', 1, {
-      logger(message) {
-        if (message && typeof message.progress === 'number') {
-          const percent = message.status === 'recognizing text'
-            ? message.progress * 100
-            : Math.min(20, message.progress * 20);
+    setProgress(0, 'جارٍ تشغيل محرك قراءة الفواتير...');
 
-          setProgress(
-            percent,
-            message.status === 'recognizing text'
-              ? 'جارٍ قراءة النصوص...'
-              : 'جارٍ تجهيز محرك القراءة...'
-          );
+    worker = await window.Tesseract.createWorker(
+      'ara+eng',
+      1,
+      {
+        logger(message) {
+          if (
+            message &&
+            typeof message.progress === 'number'
+          ) {
+            const percent =
+              message.status === 'recognizing text'
+                ? message.progress * 100
+                : Math.min(20, message.progress * 20);
+
+            setProgress(
+              percent,
+              message.status === 'recognizing text'
+                ? 'جارٍ قراءة النصوص...'
+                : 'جارٍ تجهيز محرك القراءة...'
+            );
+          }
         }
       }
-    });
+    );
 
     try {
-      for (let index = 0; index < selectedFiles.length; index += 1) {
+      for (
+        let index = 0;
+        index < selectedFiles.length;
+        index += 1
+      ) {
         setProgress(
           (index / selectedFiles.length) * 100,
-          'قراءة الصورة ' + (index + 1) + ' من ' + selectedFiles.length
+          'قراءة الصورة ' +
+            (index + 1) +
+            ' من ' +
+            selectedFiles.length
         );
 
-        const result = await worker.recognize(selectedFiles[index]);
+        const result = await worker.recognize(
+          selectedFiles[index]
+        );
 
         totalText += (
-          result && result.data && result.data.text
-            ? result.data.text
-            : ''
+          result?.data?.text || ''
         ) + '\n';
       }
     } finally {
-      await worker.terminate();
-      worker = null;
+      if (worker) {
+        await worker.terminate();
+        worker = null;
+      }
     }
 
     lastRawText = totalText.trim();
     lastCandidates = extractCandidates(lastRawText);
 
-    setProgress(100, 'اكتملت القراءة. راجع النتائج قبل إضافتها.');
+    setProgress(
+      100,
+      'اكتملت القراءة. راجع النتائج قبل إضافتها.'
+    );
+
     renderReview();
 
     if (!lastCandidates.length) {
       throw new Error(
-        'تم استخراج النص، لكن لم أستطع اقتراح أصناف بثقة. يمكنك مراجعة النص الخام وإدخال الأصناف يدوياً.'
+        'تم استخراج النص، لكن لم أستطع اقتراح أصناف مناسبة. راجع النص الخام وأدخل الأصناف يدوياً عند الحاجة.'
       );
     }
 
     return lastCandidates;
   }
 
-  function init(PharmacyApp) {
-    app = PharmacyApp;
+  function init() {
+    const input = $('invoiceCameraInput');
 
-    const input = document.getElementById('invoiceCameraInput');
-
-    document.getElementById('openCameraBtn')?.addEventListener('click', () => {
-      input?.click();
+    $('openCameraBtn')?.addEventListener('click', () => {
+      if (input) {
+        input.setAttribute('capture', 'environment');
+        input.click();
+      }
     });
 
-    document.getElementById('chooseInvoiceImagesBtn')?.addEventListener('click', () => {
+    $('chooseInvoiceImagesBtn')?.addEventListener('click', () => {
       if (input) {
         input.removeAttribute('capture');
         input.click();
-        input.setAttribute('capture', 'environment');
       }
     });
 
@@ -269,70 +350,94 @@
 
       renderSelectedImages();
 
-      const error = document.getElementById('ocrError');
-      if (error) error.hidden = true;
+      if ($('ocrError')) $('ocrError').hidden = true;
     });
 
-    document.getElementById('clearInvoiceImagesBtn')?.addEventListener('click', () => {
+    $('clearInvoiceImagesBtn')?.addEventListener('click', () => {
       selectedFiles = [];
 
       if (input) input.value = '';
 
       renderSelectedImages();
 
-      const reviewPanel = document.getElementById('ocrReviewPanel');
-      if (reviewPanel) reviewPanel.hidden = true;
+      if ($('ocrReviewPanel')) {
+        $('ocrReviewPanel').hidden = true;
+      }
+
+      if ($('ocrProgressArea')) {
+        $('ocrProgressArea').hidden = true;
+      }
 
       lastCandidates = [];
       lastRawText = '';
     });
 
-    document.getElementById('runOcrBtn')?.addEventListener('click', async () => {
-      const error = document.getElementById('ocrError');
-      if (error) error.hidden = true;
+    $('runOcrBtn')?.addEventListener('click', async () => {
+      if ($('ocrError')) $('ocrError').hidden = true;
 
-      const button = document.getElementById('runOcrBtn');
-      button.disabled = true;
+      const button = $('runOcrBtn');
+      if (button) button.disabled = true;
 
       try {
         await recognizeImages();
-      } catch (problem) {
-        if (error) {
-          error.textContent = problem.message || 'حدث خطأ أثناء قراءة الصور.';
-          error.hidden = false;
-        }
+      } catch (error) {
+        showError(
+          error.message || 'حدث خطأ أثناء قراءة الصور.'
+        );
       } finally {
-        button.disabled = selectedFiles.length === 0;
+        if (button) {
+          button.disabled = selectedFiles.length === 0;
+        }
       }
     });
 
-    document.getElementById('addOcrItemsBtn')?.addEventListener('click', () => {
+    $('addOcrItemsBtn')?.addEventListener('click', () => {
       const valid = lastCandidates.filter(item =>
         typeof item.name === 'string' &&
         item.name.trim() &&
-        Number.isInteger(Number(item.paidQty)) &&
+        Number.isSafeInteger(Number(item.paidQty)) &&
         Number(item.paidQty) > 0 &&
-        Number.isInteger(Number(item.bonusQty)) &&
+        Number.isSafeInteger(Number(item.bonusQty)) &&
         Number(item.bonusQty) >= 0 &&
         Number.isFinite(Number(item.unitPrice)) &&
         Number(item.unitPrice) >= 0
       );
 
       if (!valid.length) {
-        app.toast('لا توجد أصناف صالحة للإضافة. راجع القيم أولاً.');
+        toast('لا توجد أصناف صالحة للإضافة. راجع القيم أولاً.');
         return;
       }
 
-      window.PharmacyInvoice.addMany(valid);
+      try {
+        if (
+          !window.PharmacyInvoice ||
+          typeof window.PharmacyInvoice.addMany !== 'function'
+        ) {
+          throw new Error('نظام الفواتير غير جاهز.');
+        }
 
-      document.getElementById('ocrReviewPanel').hidden = true;
+        window.PharmacyInvoice.addMany(valid);
 
-      app.toast('تمت إضافة ' + valid.length + ' أصناف إلى مسودة الفاتورة.');
+        if ($('ocrReviewPanel')) {
+          $('ocrReviewPanel').hidden = true;
+        }
+
+        toast(
+          'تمت إضافة ' +
+          valid.length +
+          ' أصناف إلى مسودة الفاتورة.'
+        );
+      } catch (error) {
+        toast(error.message || 'تعذرت إضافة الأصناف.');
+      }
     });
 
-    document.getElementById('discardOcrBtn')?.addEventListener('click', () => {
+    $('discardOcrBtn')?.addEventListener('click', () => {
       lastCandidates = [];
-      document.getElementById('ocrReviewPanel').hidden = true;
+
+      if ($('ocrReviewPanel')) {
+        $('ocrReviewPanel').hidden = true;
+      }
     });
   }
 
@@ -340,4 +445,13 @@
     init,
     getSelectedFiles: () => selectedFiles.slice()
   });
+
+  // تشغيل OCR تلقائياً بعد تجهيز الصفحة.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, {
+      once: true
+    });
+  } else {
+    init();
+  }
 })();
