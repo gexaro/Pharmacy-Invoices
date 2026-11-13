@@ -43,6 +43,24 @@
     return localDate().slice(0, 7);
   }
 
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
+    const register = () => {
+      navigator.serviceWorker
+        .register('./sw.js')
+        .catch(() => {});
+    };
+
+    if (document.readyState === 'complete') {
+      register();
+    } else {
+      window.addEventListener('load', register, {
+        once: true
+      });
+    }
+  }
+
   function showPage(page) {
     const panels = document.querySelectorAll('[data-page-panel]');
     const buttons = document.querySelectorAll('[data-page]');
@@ -84,7 +102,6 @@
       window.PharmacyReports?.load();
     }
 
-    // auto مدعوم في Safari والمتصفحات الحديثة.
     window.scrollTo({
       top: 0,
       behavior: 'auto'
@@ -144,14 +161,6 @@
         root.dataset.theme === 'dark' ? 'light' : 'dark'
       );
     });
-  }
-
-  function validDate(value) {
-    return (
-      typeof value === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-      !Number.isNaN(Date.parse(value + 'T00:00:00'))
-    );
   }
 
   async function refreshDashboard() {
@@ -574,6 +583,7 @@
     );
 
     refreshDashboard();
+    registerServiceWorker();
   }
 
   if (document.readyState === 'loading') {
