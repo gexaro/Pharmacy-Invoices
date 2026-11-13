@@ -88,37 +88,53 @@
   }
 
   // يعوّض الرصيد الدائن لفئة مقابل مديونية الفئة الأخرى.
+
   function offsetCredits(balances) {
     let medicine = round(balances.medicine.balance);
     let general = round(balances.general.balance);
 
     let medicineCreditUsed = 0;
     let generalCreditUsed = 0;
+    let remainingCredit = 0;
 
     if (medicine < 0 && general > 0) {
+      const credit = -medicine;
+
       medicineCreditUsed = round(
-        Math.min(-medicine, general)
+        Math.min(credit, general)
       );
 
       general = round(general - medicineCreditUsed);
+      remainingCredit = round(credit - medicineCreditUsed);
       medicine = 0;
+
     } else if (general < 0 && medicine > 0) {
+      const credit = -general;
+
       generalCreditUsed = round(
-        Math.min(-general, medicine)
+        Math.min(credit, medicine)
       );
 
       medicine = round(medicine - generalCreditUsed);
+      remainingCredit = round(credit - generalCreditUsed);
       general = 0;
+
+    } else {
+      remainingCredit = round(
+        Math.max(0, -medicine) +
+        Math.max(0, -general)
+      );
+
+      medicine = Math.max(0, medicine);
+      general = Math.max(0, general);
     }
 
     return {
-      medicine: Math.max(0, medicine),
-      general: Math.max(0, general),
+      medicine,
+      general,
       medicineCreditUsed,
       generalCreditUsed,
-      remainingCredit: round(
-        Math.max(0, -medicine) + Math.max(0, -general)
-      )
+      remainingCredit
     };
   }
 
