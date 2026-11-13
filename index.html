@@ -1,0 +1,560 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#183c32">
+  <meta name="description" content="نظام إدارة مشتريات وفواتير الصيدلية">
+  <title>Pharmacy Purchase Manager</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-shell">
+
+    <header class="top-header">
+      <div class="header-brand">
+        <div class="brand-icon">P</div>
+        <div>
+          <h1>Pharmacy Manager</h1>
+          <p>إدارة مشتريات الصيدلية</p>
+        </div>
+      </div>
+
+      <button id="themeToggle" class="icon-button" aria-label="تغيير المظهر">
+        <span id="themeIcon">☾</span>
+      </button>
+    </header>
+
+    <main class="main-content">
+
+      <section class="welcome-section">
+        <div>
+          <span class="eyebrow">لوحة التحكم</span>
+          <h2>الحسابات والمشتريات</h2>
+          <p id="todayDate">متابعة فواتير المورد وحساباته</p>
+        </div>
+        <div class="status-indicator">
+          <span></span>
+          محلي
+        </div>
+      </section>
+
+      <!-- Summary -->
+      <section class="summary-grid">
+
+        <article class="summary-card primary-card">
+          <div class="summary-label">الرصيد المستحق للمورد</div>
+          <div class="summary-value" id="supplierBalance">0</div>
+          <div class="summary-foot">دينار عراقي</div>
+        </article>
+
+        <article class="summary-card">
+          <div class="summary-label">مشتريات هذا الشهر</div>
+          <div class="summary-value" id="monthlyPurchases">0</div>
+          <div class="summary-foot">دينار عراقي</div>
+        </article>
+
+        <article class="summary-card">
+          <div class="summary-label">إجمالي المردودات</div>
+          <div class="summary-value" id="monthlyReturns">0</div>
+          <div class="summary-foot">دينار عراقي</div>
+        </article>
+
+        <article class="summary-card">
+          <div class="summary-label">إجمالي التسديدات</div>
+          <div class="summary-value" id="monthlyPayments">0</div>
+          <div class="summary-foot">دينار عراقي</div>
+        </article>
+
+      </section>
+
+      <!-- Quick Actions -->
+      <section class="section-block">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">إدارة العمليات</span>
+            <h3>الإجراءات السريعة</h3>
+          </div>
+        </div>
+
+        <div class="actions-grid">
+          <button class="action-card" data-page="invoice">
+            <span class="action-icon">＋</span>
+            <strong>إضافة فاتورة</strong>
+            <small>تسجيل مشتريات جديدة</small>
+          </button>
+
+          <button class="action-card" data-page="return">
+            <span class="action-icon">↩</span>
+            <strong>تسجيل مردود</strong>
+            <small>إرجاع أصناف للمورد</small>
+          </button>
+
+          <button class="action-card" data-page="payment">
+            <span class="action-icon">د.ع</span>
+            <strong>تسديد حساب</strong>
+            <small>تسجيل دفعة وخصم</small>
+          </button>
+
+          <button class="action-card" data-page="reports">
+            <span class="action-icon">▤</span>
+            <strong>التقارير</strong>
+            <small>تحليل المشتريات</small>
+          </button>
+        </div>
+      </section>
+
+      <!-- Invoice Form -->
+      <section class="page-section active" id="page-invoice">
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">المشتريات</span>
+            <h3>إضافة فاتورة جديدة</h3>
+          </div>
+        </div>
+
+        <div class="panel">
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="invoiceType">نوع الفاتورة</label>
+              <select id="invoiceType">
+                <option value="medicine">الأدوية</option>
+                <option value="general">قديم + مواد عامة</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="invoiceNumber">رقم الفاتورة</label>
+              <input id="invoiceNumber" type="text" placeholder="رقم الفاتورة">
+            </div>
+
+            <div class="field">
+              <label for="invoiceDate">تاريخ الفاتورة</label>
+              <input id="invoiceDate" type="date">
+            </div>
+
+            <div class="field">
+              <label for="invoiceNotes">ملاحظات</label>
+              <input id="invoiceNotes" type="text" placeholder="اختياري">
+            </div>
+          </div>
+
+          <div class="subsection-heading">
+            <h4>أصناف الفاتورة</h4>
+            <span class="muted-text">أدخل الكميات والأسعار كما تظهر بالفاتورة</span>
+          </div>
+
+          <div class="form-grid item-entry">
+            <div class="field field-wide">
+              <label for="itemName">اسم الصنف</label>
+              <input id="itemName" type="text" placeholder="اسم الدواء أو المادة">
+            </div>
+
+            <div class="field">
+              <label for="itemPaidQty">الكمية المدفوعة</label>
+              <input id="itemPaidQty" type="number" min="0" step="1" placeholder="0">
+            </div>
+
+            <div class="field">
+              <label for="itemBonusQty">كمية البونص</label>
+              <input id="itemBonusQty" type="number" min="0" step="1" value="0">
+            </div>
+
+            <div class="field">
+              <label for="itemUnitPrice">سعر الوحدة</label>
+              <input id="itemUnitPrice" type="number" min="0" step="any" placeholder="0">
+            </div>
+
+            <div class="field field-action">
+              <label>&nbsp;</label>
+              <button id="addItemBtn" class="primary-button">إضافة الصنف</button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>الصنف</th>
+                  <th>مدفوع</th>
+                  <th>بونص</th>
+                  <th>الإجمالي</th>
+                  <th>سعر الوحدة</th>
+                  <th>قيمة الصنف</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="invoiceItemsBody">
+                <tr>
+                  <td colspan="7" class="empty-cell">لم تتم إضافة أصناف بعد</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="invoice-total">
+            <span>إجمالي الفاتورة</span>
+            <strong id="invoiceTotal">0 د.ع</strong>
+          </div>
+
+          <button id="saveInvoiceBtn" class="primary-button full-button">
+            حفظ الفاتورة
+          </button>
+
+        </div>
+      </section>
+
+      <!-- Returns -->
+      <section class="page-section" id="page-return">
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">المرتجعات</span>
+            <h3>تسجيل مردود للمورد</h3>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="form-grid">
+
+            <div class="field">
+              <label for="returnType">فئة المردود</label>
+              <select id="returnType">
+                <option value="medicine">الأدوية</option>
+                <option value="general">قديم + مواد عامة</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="returnDate">تاريخ المردود</label>
+              <input id="returnDate" type="date">
+            </div>
+
+            <div class="field">
+              <label for="returnInvoice">الفاتورة الأصلية</label>
+              <select id="returnInvoice">
+                <option value="">بدون ربط بفاتورة</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="returnNumber">رقم مستند المردود</label>
+              <input id="returnNumber" type="text" placeholder="اختياري">
+            </div>
+
+            <div class="field">
+              <label for="returnAmount">قيمة المردود</label>
+              <input id="returnAmount" type="number" min="0" placeholder="0">
+            </div>
+
+            <div class="field">
+              <label for="returnNotes">ملاحظات</label>
+              <input id="returnNotes" type="text" placeholder="سبب أو تفاصيل المردود">
+            </div>
+
+          </div>
+
+          <button id="saveReturnBtn" class="primary-button full-button">
+            حفظ المردود
+          </button>
+        </div>
+      </section>
+
+      <!-- Payment -->
+      <section class="page-section" id="page-payment">
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">الحسابات المالية</span>
+            <h3>تسديد حساب المورد</h3>
+          </div>
+        </div>
+
+        <div class="panel">
+
+          <div class="balance-breakdown">
+            <div class="balance-row">
+              <span>رصيد الأدوية</span>
+              <strong id="medicineBalance">0 د.ع</strong>
+            </div>
+            <div class="balance-row">
+              <span>رصيد القديم والمواد العامة</span>
+              <strong id="generalBalance">0 د.ع</strong>
+            </div>
+            <div class="balance-row total-row">
+              <span>إجمالي الرصيد</span>
+              <strong id="totalBalance">0 د.ع</strong>
+            </div>
+          </div>
+
+          <div class="subsection-heading">
+            <h4>الخصم عند التسديد</h4>
+            <span class="muted-text">نسبة مستقلة لكل فئة</span>
+          </div>
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label for="medicineDiscount">خصم الأدوية %</label>
+              <input id="medicineDiscount" type="number" min="0" max="100" step="0.01" value="0">
+            </div>
+
+            <div class="field">
+              <label for="generalDiscount">خصم القديم والمواد العامة %</label>
+              <input id="generalDiscount" type="number" min="0" max="100" step="0.01" value="0">
+            </div>
+
+          </div>
+
+          <div class="payment-calculation">
+            <div class="balance-row">
+              <span>قيمة الأدوية بعد الخصم</span>
+              <strong id="medicineAfterDiscount">0 د.ع</strong>
+            </div>
+            <div class="balance-row">
+              <span>قيمة القديم بعد الخصم</span>
+              <strong id="generalAfterDiscount">0 د.ع</strong>
+            </div>
+            <div class="balance-row total-row">
+              <span>الإجمالي المطلوب</span>
+              <strong id="paymentDue">0 د.ع</strong>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="paymentAmount">المبلغ المسدد فعلياً</label>
+            <input id="paymentAmount" type="number" min="0" placeholder="المبلغ">
+          </div>
+
+          <div class="field">
+            <label for="paymentDate">تاريخ التسديد</label>
+            <input id="paymentDate" type="date">
+          </div>
+
+          <div class="field">
+            <label for="paymentNotes">ملاحظات</label>
+            <input id="paymentNotes" type="text" placeholder="اختياري">
+          </div>
+
+          <button id="savePaymentBtn" class="primary-button full-button">
+            تسجيل التسديد
+          </button>
+
+          <p class="hint-text">
+            الخصم يُحسب على كامل رصيد كل فئة وقت التسديد، وليس على مبلغ الدفعة الجزئية.
+            سيُحفظ سجل الخصم والتسديد منفصلين عن الفواتير الأصلية.
+          </p>
+
+        </div>
+      </section>
+
+      <!-- Reports -->
+      <section class="page-section" id="page-reports">
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">التحليل المالي</span>
+            <h3>التقارير والإحصائيات</h3>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="form-grid">
+            <div class="field">
+              <label for="reportMonth">الشهر</label>
+              <input id="reportMonth" type="month">
+            </div>
+            <div class="field field-action">
+              <label>&nbsp;</label>
+              <button id="loadReportBtn" class="secondary-button">عرض التقرير</button>
+            </div>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-card">
+              <span>فواتير الأدوية</span>
+              <strong id="reportMedicine">0</strong>
+            </div>
+            <div class="report-card">
+              <span>فواتير القديم والمواد العامة</span>
+              <strong id="reportGeneral">0</strong>
+            </div>
+            <div class="report-card">
+              <span>عدد الفواتير</span>
+              <strong id="reportInvoiceCount">0</strong>
+            </div>
+            <div class="report-card">
+              <span>عدد الأصناف</span>
+              <strong id="reportItemCount">0</strong>
+            </div>
+            <div class="report-card">
+              <span>قيمة المردودات</span>
+              <strong id="reportReturns">0</strong>
+            </div>
+            <div class="report-card">
+              <span>قيمة البونص بالقطع</span>
+              <strong id="reportBonus">0</strong>
+            </div>
+          </div>
+
+          <div class="subsection-heading">
+            <h4>تفاصيل المشتريات</h4>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>رقم الفاتورة</th>
+                  <th>الفئة</th>
+                  <th>الأصناف</th>
+                  <th>الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody id="reportInvoicesBody">
+                <tr>
+                  <td colspan="5" class="empty-cell">اختر الشهر لعرض التقرير</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button id="exportCsvBtn" class="secondary-button full-button">
+            تصدير التقرير CSV
+          </button>
+        </div>
+      </section>
+
+      <!-- Invoice Archive -->
+      <section class="page-section" id="page-archive">
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">الأرشيف</span>
+            <h3>سجل الفواتير والعمليات</h3>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="field">
+            <label for="archiveSearch">بحث</label>
+            <input id="archiveSearch" type="search" placeholder="رقم الفاتورة أو اسم الصنف">
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>الرقم</th>
+                  <th>النوع</th>
+                  <th>الفئة</th>
+                  <th>القيمة</th>
+                </tr>
+              </thead>
+              <tbody id="archiveBody">
+                <tr>
+                  <td colspan="5" class="empty-cell">لا توجد عمليات مسجلة</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings and Backup -->
+      <section class="page-section" id="page-settings">
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">البيانات</span>
+            <h3>الإعدادات والنسخ الاحتياطي</h3>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h4>بيانات المورد</h4>
+
+          <div class="field">
+            <label for="supplierName">اسم المورد</label>
+            <input id="supplierName" type="text" placeholder="اسم المورد">
+          </div>
+
+          <button id="saveSettingsBtn" class="secondary-button full-button">
+            حفظ الإعدادات
+          </button>
+
+          <div class="subsection-heading">
+            <h4>النسخ الاحتياطي</h4>
+          </div>
+
+          <p class="hint-text">
+            بيانات التطبيق محفوظة على هذا الجهاز والمتصفح. أنشئ نسخة احتياطية
+            بشكل دوري حتى تتمكن من استعادة بياناتك عند الحاجة.
+          </p>
+
+          <button id="backupBtn" class="primary-button full-button">
+            تصدير نسخة احتياطية
+          </button>
+
+          <div class="field">
+            <label for="restoreFile">استعادة نسخة احتياطية</label>
+            <input id="restoreFile" type="file" accept=".json,application/json">
+          </div>
+
+          <button id="restoreBtn" class="secondary-button full-button">
+            استعادة البيانات
+          </button>
+
+          <button id="clearDataBtn" class="danger-button full-button">
+            حذف جميع البيانات
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <nav class="bottom-nav" aria-label="التنقل الرئيسي">
+      <button class="nav-item active" data-page="invoice">
+        <span>＋</span>
+        <small>فاتورة</small>
+      </button>
+
+      <button class="nav-item" data-page="return">
+        <span>↩</span>
+        <small>مردود</small>
+      </button>
+
+      <button class="nav-item" data-page="payment">
+        <span>د.ع</span>
+        <small>التسديد</small>
+      </button>
+
+      <button class="nav-item" data-page="archive">
+        <span>▤</span>
+        <small>الأرشيف</small>
+      </button>
+
+      <button class="nav-item" data-page="settings">
+        <span>⚙</span>
+        <small>الإعدادات</small>
+      </button>
+    </nav>
+
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="db.js"></script>
+  <script src="invoice.js"></script>
+  <script src="reports.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
