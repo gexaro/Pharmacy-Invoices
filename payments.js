@@ -49,7 +49,6 @@
       const paid = payments.reduce((sum, payment) => {
         const allocation = payment.allocations?.[category];
 
-        // يدعم سجلات التسديد القديمة والجديدة.
         const value = typeof allocation === 'object'
           ? allocation?.amount
           : allocation;
@@ -76,6 +75,7 @@
 
     function normalize(value) {
       const number = Number(value);
+
       return Number.isFinite(number)
         ? Math.min(100, Math.max(0, number))
         : 0;
@@ -84,6 +84,41 @@
     return {
       medicine: normalize(medicineValue),
       general: normalize(generalValue)
+    };
+  }
+
+  // يعوّض الرصيد الدائن لفئة مقابل مديونية الفئة الأخرى.
+  function offsetCredits(balances) {
+    let medicine = round(balances.medicine.balance);
+    let general = round(balances.general.balance);
+
+    let medicineCreditUsed = 0;
+    let generalCreditUsed = 0;
+
+    if (medicine < 0 && general > 0) {
+      medicineCreditUsed = round(
+        Math.min(-medicine, general)
+      );
+
+      general = round(general - medicineCreditUsed);
+      medicine = 0;
+    } else if (general < 0 && medicine > 0) {
+      generalCreditUsed = round(
+        Math.min(-general, medicine)
+      );
+
+      medicine = round(medicine - generalCreditUsed);
+      general = 0;
+    }
+
+    return {
+      medicine: Math.max(0, medicine),
+      general: Math.max(0, general),
+      medicineCreditUsed,
+      generalCreditUsed,
+      remainingCredit: round(
+        Math.max(0, -medicine) + Math.max(0, -general)
+      )
     };
   }
 
@@ -99,18 +134,21 @@
       getDiscounts()
     ]);
 
+    const adjusted = offsetCredits(balances);
+
     const medicineNet = calculateNet(
-      balances.medicine.balance,
+      adjusted.medicine,
       discounts.medicine
     );
 
     const generalNet = calculateNet(
-      balances.general.balance,
+      adjusted.general,
       discounts.general
     );
 
     return {
       balances,
+      adjusted,
       discounts,
       medicineNet,
       generalNet,
@@ -121,7 +159,14 @@
   async function render() {
     const state = await calculateState();
 
-    const { balances, discounts, medicineNet, generalNet, totalDue } = state;
+    const {
+      balances,
+      adjusted,
+      discounts,
+      medicineNet,
+      generalNet,
+      totalDue
+    } = state;
 
     const values = {
       medicineBalance: balances.medicine.balance,
@@ -136,6 +181,7 @@
 
     Object.entries(values).forEach(([id, value]) => {
       const element = $(id);
+
       if (element) {
         element.textContent = money(value) + ' د.ع';
       }
@@ -153,6 +199,25 @@
 
     updatePaymentPreview(state);
 
+    const message = $('paymentPreviewMessage');
+
+    if (message && totalDue <= 0) {
+      const credit = Math.abs(
+        Math.min(
+          0,
+          balances.medicine.balance + balances.general.balance
+        )
+      );
+
+      if (credit > 0) {
+        message.textContent =
+          'لا يوجد مبلغ مستحق حالياً. الرصيد الدائن المتبقي: ' +
+          money(credit) + ' د.ع.';
+      } else {
+        message.textContent = 'لا يوجد مبلغ مستحق للتسديد حالياً.';
+      }
+    }
+
     return state;
   }
 
@@ -164,8 +229,8 @@
 
     if (!Number.isFinite(amount) || amount <= 0) {
       message.textContent =
-        'المستحق بعد الخصم: ' + money(state.totalDue) +
-        ' د.ع. أدخل مبلغ التسديد لعرض التوزيع.';
+        'المستحق بعد تعويض الأرصدة الدائنة والخصم: ' +
+        money(state.totalDue) + ' د.ع.';
       return;
     }
 
@@ -258,17 +323,20 @@
 
       const ratio = amount / state.totalDue;
 
-      const medicineAmount = round(state.medicineNet * ratio);
-      const generalAmount = round(amount - medicineAmount);
+      const medicineAmount = round(
+        state.medicineNet * ratio
+      );
+
+      const generalAmount = round(
+        amount - medicineAmount
+      );
 
       const discountAmounts = {
         medicine: round(
-          Math.max(0, state.balances.medicine.balance) -
-          state.medicineNet
+          state.adjusted.medicine - state.medicineNet
         ),
         general: round(
-          Math.max(0, state.balances.general.balance) -
-          state.generalNet
+          state.adjusted.general - state.generalNet
         )
       };
 
@@ -282,12 +350,23 @@
           general: state.balances.general.balance
         },
 
+        balancesAfterCredit: {
+          medicine: state.adjusted.medicine,
+          general: state.adjusted.general
+        },
+
+        creditApplied: {
+          medicine: state.adjusted.medicineCreditUsed,
+          general: state.adjusted.generalCreditUsed
+        },
+
+        remainingCredit: state.adjusted.remainingCredit,
+
         discounts: {
           medicine: state.discounts.medicine,
           general: state.discounts.general
         },
 
-        // الحقل المطلوب في التحقق من النسخة الاحتياطية في db.js.
         discountSnapshot: {
           medicine: state.discounts.medicine,
           general: state.discounts.general
@@ -301,7 +380,6 @@
           total: state.totalDue
         },
 
-        // يجب أن تكون القيم أرقاماً مباشرة لتوافق db.js.
         allocations: {
           medicine: medicineAmount,
           general: generalAmount
@@ -310,22 +388,32 @@
         allocationDetails: {
           medicine: {
             amount: medicineAmount,
-            remaining: round(state.medicineNet - medicineAmount)
+            remaining: round(
+              state.medicineNet - medicineAmount
+            )
           },
           general: {
             amount: generalAmount,
-            remaining: round(state.generalNet - generalAmount)
+            remaining: round(
+              state.generalNet - generalAmount
+            )
           }
         },
 
-        notes: String($('paymentNotes')?.value || '').trim(),
+        notes: String(
+          $('paymentNotes')?.value || ''
+        ).trim(),
+
         createdAt: new Date().toISOString()
       };
 
       await PharmacyDB.add('payments', record);
 
       $('paymentAmount').value = '';
-      if ($('paymentNotes')) $('paymentNotes').value = '';
+
+      if ($('paymentNotes')) {
+        $('paymentNotes').value = '';
+      }
 
       toast('تم تسجيل التسديد بنجاح.');
 
@@ -348,24 +436,38 @@
       $('paymentDate').value = today();
     }
 
-    $('savePaymentBtn')?.addEventListener('click', savePayment);
+    $('savePaymentBtn')?.addEventListener(
+      'click',
+      savePayment
+    );
 
-    $('medicineDiscount')?.addEventListener('change', saveDiscounts);
-    $('generalDiscount')?.addEventListener('change', saveDiscounts);
+    $('medicineDiscount')?.addEventListener(
+      'change',
+      saveDiscounts
+    );
 
-    $('paymentAmount')?.addEventListener('input', async () => {
-      try {
-        updatePaymentPreview(await calculateState());
-      } catch (_) {
-        // يعرض الخطأ عند تحميل الصفحة أو التسديد.
+    $('generalDiscount')?.addEventListener(
+      'change',
+      saveDiscounts
+    );
+
+    $('paymentAmount')?.addEventListener(
+      'input',
+      async () => {
+        try {
+          updatePaymentPreview(await calculateState());
+        } catch (_) {}
       }
-    });
+    );
 
-    document.addEventListener('pharmacy:data-changed', () => {
-      render().catch(error => {
-        toast(error.message || 'تعذر تحديث حساب التسديد.');
-      });
-    });
+    document.addEventListener(
+      'pharmacy:data-changed',
+      () => {
+        render().catch(error => {
+          toast(error.message || 'تعذر تحديث حساب التسديد.');
+        });
+      }
+    );
 
     render().catch(error => {
       toast(error.message || 'تعذر تحميل الأرصدة.');
@@ -380,7 +482,11 @@
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
+    document.addEventListener(
+      'DOMContentLoaded',
+      init,
+      { once: true }
+    );
   } else {
     init();
   }
