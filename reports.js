@@ -11,6 +11,13 @@
       maximumFractionDigits: 2
     }).format(Number(value) || 0);
 
+  function localMonth() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+
   function toast(message) {
     if (window.PharmacyApp?.toast) {
       window.PharmacyApp.toast(message);
@@ -382,7 +389,7 @@
 
   function init() {
     if ($('reportMonth') && !$('reportMonth').value) {
-      $('reportMonth').value = new Date().toISOString().slice(0, 7);
+      $('reportMonth').value = localMonth();
     }
 
     $('loadReportBtn')?.addEventListener('click', loadReport);
