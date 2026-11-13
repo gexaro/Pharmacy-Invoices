@@ -1,0 +1,23 @@
+
+{
+  "id": "./",
+  "name": "Pharmacy Invoices",
+  "short_name": "فواتير الصيدلية",
+  "description": "نظام إدارة فواتير ومشتريات الصيدلية",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f2e9",
+  "theme_color": "#244638",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
