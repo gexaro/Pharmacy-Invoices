@@ -23,7 +23,7 @@
         </div>
       </div>
 
-      <button id="themeToggle" class="icon-button" aria-label="تغيير المظهر">
+      <button id="themeToggle" class="icon-button" type="button" aria-label="تغيير المظهر">
         <span id="themeIcon">☾</span>
       </button>
     </header>
@@ -42,9 +42,7 @@
         </div>
       </section>
 
-      <!-- Summary -->
       <section class="summary-grid">
-
         <article class="summary-card primary-card">
           <div class="summary-label">الرصيد المستحق للمورد</div>
           <div class="summary-value" id="supplierBalance">0</div>
@@ -68,10 +66,8 @@
           <div class="summary-value" id="monthlyPayments">0</div>
           <div class="summary-foot">دينار عراقي</div>
         </article>
-
       </section>
 
-      <!-- Quick Actions -->
       <section class="section-block">
         <div class="section-heading">
           <div>
@@ -81,25 +77,25 @@
         </div>
 
         <div class="actions-grid">
-          <button class="action-card" data-page="invoice">
+          <button class="action-card" type="button" data-page="invoice">
             <span class="action-icon">＋</span>
             <strong>إضافة فاتورة</strong>
             <small>تسجيل مشتريات جديدة</small>
           </button>
 
-          <button class="action-card" data-page="return">
+          <button class="action-card" type="button" data-page="return">
             <span class="action-icon">↩</span>
             <strong>تسجيل مردود</strong>
             <small>إرجاع أصناف للمورد</small>
           </button>
 
-          <button class="action-card" data-page="payment">
+          <button class="action-card" type="button" data-page="payment">
             <span class="action-icon">د.ع</span>
             <strong>تسديد حساب</strong>
             <small>تسجيل دفعة وخصم</small>
           </button>
 
-          <button class="action-card" data-page="reports">
+          <button class="action-card" type="button" data-page="reports">
             <span class="action-icon">▤</span>
             <strong>التقارير</strong>
             <small>تحليل المشتريات</small>
@@ -107,9 +103,8 @@
         </div>
       </section>
 
-      <!-- Invoice Form -->
+      <!-- Invoice -->
       <section class="page-section active" id="page-invoice">
-
         <div class="section-heading">
           <div>
             <span class="eyebrow">المشتريات</span>
@@ -118,7 +113,6 @@
         </div>
 
         <div class="panel">
-
           <div class="form-grid">
             <div class="field">
               <label for="invoiceType">نوع الفاتورة</label>
@@ -172,7 +166,7 @@
 
             <div class="field field-action">
               <label>&nbsp;</label>
-              <button id="addItemBtn" class="primary-button">إضافة الصنف</button>
+              <button id="addItemBtn" class="primary-button" type="button">إضافة الصنف</button>
             </div>
           </div>
 
@@ -202,16 +196,14 @@
             <strong id="invoiceTotal">0 د.ع</strong>
           </div>
 
-          <button id="saveInvoiceBtn" class="primary-button full-button">
+          <button id="saveInvoiceBtn" class="primary-button full-button" type="button">
             حفظ الفاتورة
           </button>
-
         </div>
       </section>
 
       <!-- Returns -->
       <section class="page-section" id="page-return">
-
         <div class="section-heading">
           <div>
             <span class="eyebrow">المرتجعات</span>
@@ -221,7 +213,6 @@
 
         <div class="panel">
           <div class="form-grid">
-
             <div class="field">
               <label for="returnType">فئة المردود</label>
               <select id="returnType">
@@ -249,17 +240,16 @@
 
             <div class="field">
               <label for="returnAmount">قيمة المردود</label>
-              <input id="returnAmount" type="number" min="0" placeholder="0">
+              <input id="returnAmount" type="number" min="0" step="any" placeholder="0">
             </div>
 
             <div class="field">
               <label for="returnNotes">ملاحظات</label>
               <input id="returnNotes" type="text" placeholder="سبب أو تفاصيل المردود">
             </div>
-
           </div>
 
-          <button id="saveReturnBtn" class="primary-button full-button">
+          <button id="saveReturnBtn" class="primary-button full-button" type="button">
             حفظ المردود
           </button>
         </div>
@@ -267,7 +257,6 @@
 
       <!-- Payment -->
       <section class="page-section" id="page-payment">
-
         <div class="section-heading">
           <div>
             <span class="eyebrow">الحسابات المالية</span>
@@ -276,7 +265,6 @@
         </div>
 
         <div class="panel">
-
           <div class="balance-breakdown">
             <div class="balance-row">
               <span>رصيد الأدوية</span>
@@ -298,7 +286,6 @@
           </div>
 
           <div class="form-grid">
-
             <div class="field">
               <label for="medicineDiscount">خصم الأدوية %</label>
               <input id="medicineDiscount" type="number" min="0" max="100" step="0.01" value="0">
@@ -308,7 +295,6 @@
               <label for="generalDiscount">خصم القديم والمواد العامة %</label>
               <input id="generalDiscount" type="number" min="0" max="100" step="0.01" value="0">
             </div>
-
           </div>
 
           <div class="payment-calculation">
@@ -328,7 +314,7 @@
 
           <div class="field">
             <label for="paymentAmount">المبلغ المسدد فعلياً</label>
-            <input id="paymentAmount" type="number" min="0" placeholder="المبلغ">
+            <input id="paymentAmount" type="number" min="0" step="any" placeholder="المبلغ">
           </div>
 
           <div class="field">
@@ -341,7 +327,7 @@
             <input id="paymentNotes" type="text" placeholder="اختياري">
           </div>
 
-          <button id="savePaymentBtn" class="primary-button full-button">
+          <button id="savePaymentBtn" class="primary-button full-button" type="button">
             تسجيل التسديد
           </button>
 
@@ -349,13 +335,11 @@
             الخصم يُحسب على كامل رصيد كل فئة وقت التسديد، وليس على مبلغ الدفعة الجزئية.
             سيُحفظ سجل الخصم والتسديد منفصلين عن الفواتير الأصلية.
           </p>
-
         </div>
       </section>
 
       <!-- Reports -->
       <section class="page-section" id="page-reports">
-
         <div class="section-heading">
           <div>
             <span class="eyebrow">التحليل المالي</span>
@@ -371,17 +355,17 @@
             </div>
             <div class="field field-action">
               <label>&nbsp;</label>
-              <button id="loadReportBtn" class="secondary-button">عرض التقرير</button>
+              <button id="loadReportBtn" class="secondary-button" type="button">عرض التقرير</button>
             </div>
           </div>
 
           <div class="report-grid">
             <div class="report-card">
-              <span>فواتير الأدوية</span>
+              <span>مشتريات الأدوية</span>
               <strong id="reportMedicine">0</strong>
             </div>
             <div class="report-card">
-              <span>فواتير القديم والمواد العامة</span>
+              <span>مشتريات القديم والمواد العامة</span>
               <strong id="reportGeneral">0</strong>
             </div>
             <div class="report-card">
@@ -397,8 +381,16 @@
               <strong id="reportReturns">0</strong>
             </div>
             <div class="report-card">
-              <span>قيمة البونص بالقطع</span>
+              <span>كمية البونص</span>
               <strong id="reportBonus">0</strong>
+            </div>
+            <div class="report-card">
+              <span>التسديدات خلال الشهر</span>
+              <strong id="reportPayments">0</strong>
+            </div>
+            <div class="report-card">
+              <span>الخصومات خلال الشهر</span>
+              <strong id="reportDiscounts">0</strong>
             </div>
           </div>
 
@@ -415,25 +407,71 @@
                   <th>الفئة</th>
                   <th>الأصناف</th>
                   <th>الإجمالي</th>
+                  <th>التفاصيل</th>
                 </tr>
               </thead>
               <tbody id="reportInvoicesBody">
                 <tr>
-                  <td colspan="5" class="empty-cell">اختر الشهر لعرض التقرير</td>
+                  <td colspan="6" class="empty-cell">اختر الشهر لعرض التقرير</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <button id="exportCsvBtn" class="secondary-button full-button">
+          <div class="subsection-heading">
+            <h4>سجل الأصناف خلال الشهر</h4>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>اسم الصنف</th>
+                  <th>الفئة</th>
+                  <th>الكمية المدفوعة</th>
+                  <th>البونص</th>
+                  <th>إجمالي القطع</th>
+                  <th>قيمة الشراء</th>
+                </tr>
+              </thead>
+              <tbody id="reportItemsBody">
+                <tr>
+                  <td colspan="6" class="empty-cell">لا توجد بيانات أصناف</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="subsection-heading">
+            <h4>الأصناف الأكثر شراءً</h4>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>الصنف</th>
+                  <th>إجمالي القطع</th>
+                  <th>عدد مرات الشراء</th>
+                  <th>إجمالي القيمة</th>
+                </tr>
+              </thead>
+              <tbody id="reportTopItemsBody">
+                <tr>
+                  <td colspan="4" class="empty-cell">لا توجد بيانات أصناف</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button id="exportCsvBtn" class="secondary-button full-button" type="button">
             تصدير التقرير CSV
           </button>
         </div>
       </section>
 
-      <!-- Invoice Archive -->
+      <!-- Archive -->
       <section class="page-section" id="page-archive">
-
         <div class="section-heading">
           <div>
             <span class="eyebrow">الأرشيف</span>
@@ -443,8 +481,8 @@
 
         <div class="panel">
           <div class="field">
-            <label for="archiveSearch">بحث</label>
-            <input id="archiveSearch" type="search" placeholder="رقم الفاتورة أو اسم الصنف">
+            <label for="archiveSearch">بحث في الأرشيف</label>
+            <input id="archiveSearch" type="search" placeholder="رقم الفاتورة أو الصنف أو نوع العملية">
           </div>
 
           <div class="table-wrapper">
@@ -453,14 +491,15 @@
                 <tr>
                   <th>التاريخ</th>
                   <th>الرقم</th>
-                  <th>النوع</th>
+                  <th>العملية</th>
                   <th>الفئة</th>
                   <th>القيمة</th>
+                  <th>التفاصيل</th>
                 </tr>
               </thead>
               <tbody id="archiveBody">
                 <tr>
-                  <td colspan="5" class="empty-cell">لا توجد عمليات مسجلة</td>
+                  <td colspan="6" class="empty-cell">لا توجد عمليات مسجلة</td>
                 </tr>
               </tbody>
             </table>
@@ -468,9 +507,8 @@
         </div>
       </section>
 
-      <!-- Settings and Backup -->
+      <!-- Settings -->
       <section class="page-section" id="page-settings">
-
         <div class="section-heading">
           <div>
             <span class="eyebrow">البيانات</span>
@@ -486,7 +524,7 @@
             <input id="supplierName" type="text" placeholder="اسم المورد">
           </div>
 
-          <button id="saveSettingsBtn" class="secondary-button full-button">
+          <button id="saveSettingsBtn" class="secondary-button full-button" type="button">
             حفظ الإعدادات
           </button>
 
@@ -499,7 +537,7 @@
             بشكل دوري حتى تتمكن من استعادة بياناتك عند الحاجة.
           </p>
 
-          <button id="backupBtn" class="primary-button full-button">
+          <button id="backupBtn" class="primary-button full-button" type="button">
             تصدير نسخة احتياطية
           </button>
 
@@ -508,11 +546,11 @@
             <input id="restoreFile" type="file" accept=".json,application/json">
           </div>
 
-          <button id="restoreBtn" class="secondary-button full-button">
+          <button id="restoreBtn" class="secondary-button full-button" type="button">
             استعادة البيانات
           </button>
 
-          <button id="clearDataBtn" class="danger-button full-button">
+          <button id="clearDataBtn" class="danger-button full-button" type="button">
             حذف جميع البيانات
           </button>
         </div>
@@ -521,27 +559,27 @@
     </main>
 
     <nav class="bottom-nav" aria-label="التنقل الرئيسي">
-      <button class="nav-item active" data-page="invoice">
+      <button class="nav-item active" type="button" data-page="invoice">
         <span>＋</span>
         <small>فاتورة</small>
       </button>
 
-      <button class="nav-item" data-page="return">
+      <button class="nav-item" type="button" data-page="return">
         <span>↩</span>
         <small>مردود</small>
       </button>
 
-      <button class="nav-item" data-page="payment">
+      <button class="nav-item" type="button" data-page="payment">
         <span>د.ع</span>
         <small>التسديد</small>
       </button>
 
-      <button class="nav-item" data-page="archive">
+      <button class="nav-item" type="button" data-page="archive">
         <span>▤</span>
         <small>الأرشيف</small>
       </button>
 
-      <button class="nav-item" data-page="settings">
+      <button class="nav-item" type="button" data-page="settings">
         <span>⚙</span>
         <small>الإعدادات</small>
       </button>
@@ -555,6 +593,5 @@
   <script src="invoice.js"></script>
   <script src="reports.js"></script>
   <script src="app.js"></script>
-
 </body>
 </html>
