@@ -1,772 +1,177 @@
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#183C32">
-  <meta name="description" content="نظام إدارة فواتير ومشتريات الصيدلية">
+  <meta name="theme-color" content="#183c32">
+  <meta name="description" content="نظام محلي لإدارة فواتير ومشتريات الصيدلية وحساب المورد">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pharmacy">
   <title>Pharmacy Invoices</title>
-
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
   <div class="app-shell">
-
-    <!-- HEADER -->
     <header class="top-header">
-      <div class="header-brand">
-        <div class="brand-icon">P</div>
-        <div class="brand-copy">
-          <h1>Pharmacy</h1>
-          <p>إدارة فواتير الصيدلية</p>
-        </div>
-      </div>
-
-      <button id="themeToggle" class="icon-button" type="button" aria-label="تغيير المظهر">
-        <span id="themeIcon">☾</span>
-      </button>
+      <a class="header-brand" href="#page-dashboard" data-page="dashboard" aria-label="الرئيسية">
+        <span class="brand-icon">P</span>
+        <span class="brand-copy"><strong>Pharmacy</strong><small>إدارة فواتير الصيدلية</small></span>
+      </a>
+      <button id="themeToggle" class="icon-button" type="button" aria-label="تغيير المظهر"><span id="themeIcon">☾</span></button>
     </header>
 
     <main class="main-content">
-
-      <!-- DASHBOARD -->
-      <section class="dashboard-section" id="dashboardSection">
+      <section class="page-section active" id="page-dashboard" data-page-panel="dashboard">
         <div class="welcome-section">
-          <div>
-            <span class="eyebrow">لوحة التحكم</span>
-            <h2>ملخص الحسابات</h2>
-            <p id="todayDate">متابعة مشتريات وحسابات المورد</p>
-          </div>
-          <div class="status-indicator">
-            <span></span>
-            بيانات محلية
-          </div>
+          <div><span class="eyebrow">لوحة التحكم</span><h1>ملخص الحسابات</h1><p id="todayDate">متابعة مشتريات وحسابات المورد</p></div>
+          <span class="status-indicator"><i></i> بيانات محلية</span>
         </div>
-
         <div class="summary-grid">
-          <article class="summary-card primary-card">
-            <span class="summary-label">الرصيد المستحق للمورد</span>
-            <strong class="summary-value" id="supplierBalance">0</strong>
-            <span class="summary-foot">دينار عراقي</span>
-          </article>
-
-          <article class="summary-card">
-            <span class="summary-label">مشتريات هذا الشهر</span>
-            <strong class="summary-value" id="monthlyPurchases">0</strong>
-            <span class="summary-foot">دينار عراقي</span>
-          </article>
-
-          <article class="summary-card">
-            <span class="summary-label">المردودات هذا الشهر</span>
-            <strong class="summary-value" id="monthlyReturns">0</strong>
-            <span class="summary-foot">دينار عراقي</span>
-          </article>
-
-          <article class="summary-card">
-            <span class="summary-label">التسديدات هذا الشهر</span>
-            <strong class="summary-value" id="monthlyPayments">0</strong>
-            <span class="summary-foot">دينار عراقي</span>
-          </article>
+          <article class="summary-card primary-card"><span class="summary-label">صافي حساب المورد</span><strong class="summary-value" id="supplierBalance">0</strong><span class="summary-foot">دينار عراقي</span></article>
+          <article class="summary-card"><span class="summary-label">مشتريات هذا الشهر</span><strong class="summary-value" id="monthlyPurchases">0</strong><span class="summary-foot">دينار عراقي</span></article>
+          <article class="summary-card"><span class="summary-label">المردودات هذا الشهر</span><strong class="summary-value" id="monthlyReturns">0</strong><span class="summary-foot">دينار عراقي</span></article>
+          <article class="summary-card"><span class="summary-label">التسديدات هذا الشهر</span><strong class="summary-value" id="monthlyPayments">0</strong><span class="summary-foot">دينار عراقي</span></article>
         </div>
-
-        <div class="section-block">
-          <div class="section-heading">
-            <div>
-              <span class="eyebrow">إدارة الصيدلية</span>
-              <h3>الإجراءات السريعة</h3>
-            </div>
-          </div>
-
+        <section class="section-block">
+          <div class="section-heading"><div><span class="eyebrow">إدارة الصيدلية</span><h2>الإجراءات السريعة</h2></div></div>
           <div class="actions-grid">
-            <button class="action-card" type="button" data-page="invoice">
-              <span class="action-icon">＋</span>
-              <strong>فاتورة جديدة</strong>
-              <small>تصوير وقراءة الفاتورة</small>
-            </button>
-
-            <button class="action-card" type="button" data-page="return">
-              <span class="action-icon">↩</span>
-              <strong>مردود</strong>
-              <small>تسجيل مواد مرتجعة</small>
-            </button>
-
-            <button class="action-card" type="button" data-page="payment">
-              <span class="action-icon">د.ع</span>
-              <strong>تسديد</strong>
-              <small>إدارة حساب المورد</small>
-            </button>
-
-            <button class="action-card" type="button" data-page="reports">
-              <span class="action-icon">▤</span>
-              <strong>التقارير</strong>
-              <small>تحليل المشتريات</small>
-            </button>
+            <button class="action-card" type="button" data-page="invoice"><span class="action-icon">＋</span><strong>فاتورة جديدة</strong><small>تصوير وقراءة الفاتورة</small></button>
+            <button class="action-card" type="button" data-page="return"><span class="action-icon">↩</span><strong>مردود</strong><small>تسجيل مواد مرتجعة</small></button>
+            <button class="action-card" type="button" data-page="payment"><span class="action-icon">د.ع</span><strong>تسديد</strong><small>إدارة حساب المورد</small></button>
+            <button class="action-card" type="button" data-page="reports"><span class="action-icon">▤</span><strong>التقارير</strong><small>تحليل المشتريات</small></button>
           </div>
-        </div>
+        </section>
+        <section class="panel dashboard-balances"><h2>تفصيل الأرصدة</h2><div class="balance-row"><span>الأدوية</span><strong id="dashboardMedicineBalance">0 د.ع</strong></div><div class="balance-row"><span>قديم + مواد عامة</span><strong id="dashboardGeneralBalance">0 د.ع</strong></div></section>
       </section>
 
-      <!-- INVOICE PAGE -->
-      <section class="page-section active" id="page-invoice">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">المشتريات</span>
-            <h2>إضافة فاتورة</h2>
-            <p>صوّر الفاتورة ودع النظام يستخرج بياناتها</p>
-          </div>
-        </div>
-
+      <section class="page-section" id="page-invoice" data-page-panel="invoice" hidden>
+        <div class="section-heading"><div><span class="eyebrow">المشتريات</span><h1>إضافة فاتورة</h1><p>صوّر الفاتورة وراجع البيانات المستخرجة قبل الحفظ</p></div></div>
         <div class="panel">
           <div class="form-grid">
-            <div class="field">
-              <label for="invoiceType">فئة الفاتورة</label>
-              <select id="invoiceType">
-                <option value="medicine">الأدوية</option>
-                <option value="general">قديم + مواد عامة</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="invoiceNumber">رقم الفاتورة</label>
-              <input id="invoiceNumber" type="text" placeholder="رقم الفاتورة">
-            </div>
-
-            <div class="field">
-              <label for="invoiceDate">تاريخ الفاتورة</label>
-              <input id="invoiceDate" type="date">
-            </div>
-
-            <div class="field">
-              <label for="invoiceNotes">ملاحظات</label>
-              <input id="invoiceNotes" type="text" placeholder="اختياري">
-            </div>
+            <div class="field"><label for="invoiceType">فئة الفاتورة</label><select id="invoiceType"><option value="medicine">الأدوية</option><option value="general">قديم + مواد عامة</option></select></div>
+            <div class="field"><label for="invoiceNumber">رقم الفاتورة</label><input id="invoiceNumber" type="text" placeholder="رقم الفاتورة"></div>
+            <div class="field"><label for="invoiceDate">تاريخ الفاتورة</label><input id="invoiceDate" type="date"></div>
+            <div class="field"><label for="invoiceNotes">ملاحظات</label><input id="invoiceNotes" type="text" placeholder="اختياري"></div>
           </div>
         </div>
-
-        <!-- CAMERA / OCR -->
         <div class="panel ocr-panel">
-          <div class="section-heading">
-            <div>
-              <span class="eyebrow">التعرف الضوئي OCR</span>
-              <h3>قراءة الفاتورة بالكاميرا</h3>
-              <p>يدعم قراءة النصوص العربية والإنجليزية</p>
-            </div>
-            <span class="ocr-icon">⌁</span>
-          </div>
-
-          <input
-            id="invoiceCameraInput"
-            class="visually-hidden"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-          >
-
-          <div class="camera-actions">
-            <button id="openCameraBtn" class="primary-button" type="button">
-              <span>▣</span>
-              تصوير الفاتورة
-            </button>
-
-            <button id="chooseInvoiceImagesBtn" class="secondary-button" type="button">
-              اختيار صور
-            </button>
-          </div>
-
-          <div id="ocrImagePreview" class="ocr-image-preview" hidden>
-            <div class="subsection-heading">
-              <h4>الصور المختارة</h4>
-              <button id="clearInvoiceImagesBtn" class="text-button" type="button">
-                حذف الصور
-              </button>
-            </div>
-            <div id="ocrImageList" class="ocr-image-list"></div>
-          </div>
-
-          <div class="ocr-info">
-            <span class="info-icon">i</span>
-            <p>
-              ستتم قراءة الصور داخل المتصفح. راجع البيانات المستخرجة وصححها
-              قبل إضافتها إلى الفاتورة.
-            </p>
-          </div>
-
-          <button id="runOcrBtn" class="primary-button full-button" type="button" disabled>
-            استخراج بيانات الفاتورة
-          </button>
-
-          <div id="ocrProgressArea" class="ocr-progress-area" hidden>
-            <div class="progress-heading">
-              <span id="ocrStatusText">جارٍ تجهيز محرك القراءة...</span>
-              <strong id="ocrProgressPercent">0%</strong>
-            </div>
-            <div class="progress-track">
-              <div id="ocrProgressBar" class="progress-fill"></div>
-            </div>
-          </div>
-
-          <div id="ocrError" class="message-box error-message" hidden></div>
+          <div class="section-heading"><div><span class="eyebrow">التعرف الضوئي OCR</span><h2>قراءة الفاتورة بالكاميرا</h2><p>قراءة النصوص العربية والإنجليزية</p></div><span class="ocr-icon">⌁</span></div>
+          <input id="invoiceCameraInput" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple>
+          <div class="camera-actions"><button id="openCameraBtn" class="primary-button" type="button">▣ تصوير الفاتورة</button><button id="chooseInvoiceImagesBtn" class="secondary-button" type="button">اختيار صور</button></div>
+          <div id="ocrImagePreview" class="ocr-image-preview" hidden><div class="subsection-heading"><h3>الصور المختارة</h3><button id="clearInvoiceImagesBtn" class="text-button" type="button">حذف الصور</button></div><div id="ocrImageList" class="ocr-image-list"></div></div>
+          <div class="ocr-info"><span>i</span><p>تتم قراءة الصور داخل المتصفح. اقتراح الكمية والسعر يعتمد على نمط الأرقام في السطر وقد يخطئ عند اختلاف ترتيب الأعمدة؛ لذلك يجب مراجعة كل صنف قبل الحفظ.</p></div>
+          <button id="runOcrBtn" class="primary-button full-button" type="button" disabled>استخراج بيانات الفاتورة</button>
+          <div id="ocrProgressArea" class="ocr-progress-area" hidden><div class="progress-heading"><span id="ocrStatusText">جارٍ تجهيز محرك القراءة...</span><strong id="ocrProgressPercent">0%</strong></div><div class="progress-track"><div id="ocrProgressBar" class="progress-fill"></div></div></div>
+          <div id="ocrError" class="message-box error-message" role="alert" hidden></div>
         </div>
-
-        <!-- OCR REVIEW -->
         <div id="ocrReviewPanel" class="panel" hidden>
-          <div class="section-heading">
-            <div>
-              <span class="eyebrow">مراجعة البيانات</span>
-              <h3>الأصناف المستخرجة</h3>
-              <p>تأكد من صحة الاسم والكميات والأسعار</p>
-            </div>
-          </div>
-
-          <div class="ocr-review-summary">
-            <span id="ocrDetectedCount">0 أصناف</span>
-            <span id="ocrReviewHint">يمكنك تعديل أي قيمة قبل الإضافة</span>
-          </div>
-
-          <div class="table-wrapper">
-            <table class="data-table review-table">
-              <thead>
-                <tr>
-                  <th>اسم الصنف</th>
-                  <th>مدفوع</th>
-                  <th>بونص</th>
-                  <th>سعر الوحدة</th>
-                  <th>الحالة</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="ocrReviewBody"></tbody>
-            </table>
-          </div>
-
-          <div class="review-actions">
-            <button id="addOcrItemsBtn" class="primary-button" type="button">
-              إضافة الأصناف إلى الفاتورة
-            </button>
-            <button id="discardOcrBtn" class="secondary-button" type="button">
-              إلغاء المراجعة
-            </button>
-          </div>
-
-          <details class="ocr-raw-details">
-            <summary>عرض النص الخام المستخرج من الصور</summary>
-            <pre id="ocrRawText" class="ocr-raw-text"></pre>
-          </details>
+          <div class="section-heading"><div><span class="eyebrow">مراجعة البيانات</span><h2>الأصناف المستخرجة</h2><p>صحح الاسم والكميات والأسعار قبل الإضافة</p></div></div>
+          <div class="ocr-review-summary"><span id="ocrDetectedCount">0 أصناف</span><span id="ocrReviewHint">النتائج تقديرية وتحتاج مراجعتك</span></div>
+          <div id="ocrReviewList" class="ocr-review-list"></div>
+          <div class="review-actions"><button id="addOcrItemsBtn" class="primary-button" type="button">إضافة الأصناف إلى الفاتورة</button><button id="discardOcrBtn" class="secondary-button" type="button">إلغاء المراجعة</button></div>
+          <details class="ocr-raw-details"><summary>عرض النص الخام المستخرج</summary><pre id="ocrRawText" class="ocr-raw-text"></pre></details>
         </div>
-
-        <!-- MANUAL CORRECTION / ADD ITEM -->
         <div class="panel">
-          <div class="subsection-heading">
-            <div>
-              <h3>إضافة أو تصحيح صنف</h3>
-              <span class="muted-text">يمكنك تصحيح أي صنف يدوياً عند الحاجة</span>
-            </div>
-          </div>
-
+          <div class="subsection-heading"><div><h2>إضافة أو تصحيح صنف</h2><span class="muted-text">يمكنك إدخال الصنف يدوياً أو تصحيحه</span></div></div>
           <div class="form-grid item-entry">
-            <div class="field field-wide">
-              <label for="itemName">اسم الصنف</label>
-              <input id="itemName" type="text" placeholder="اسم الدواء أو المادة">
-            </div>
-
-            <div class="field">
-              <label for="itemPaidQty">الكمية المدفوعة</label>
-              <input id="itemPaidQty" type="number" min="0" step="1" placeholder="0">
-            </div>
-
-            <div class="field">
-              <label for="itemBonusQty">كمية البونص</label>
-              <input id="itemBonusQty" type="number" min="0" step="1" value="0">
-            </div>
-
-            <div class="field">
-              <label for="itemUnitPrice">سعر الوحدة</label>
-              <input id="itemUnitPrice" type="number" min="0" step="any" placeholder="0">
-            </div>
+            <div class="field field-wide"><label for="itemName">اسم الصنف</label><input id="itemName" type="text" placeholder="اسم الدواء أو المادة"></div>
+            <div class="field"><label for="itemPaidQty">الكمية المدفوعة</label><input id="itemPaidQty" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></div>
+            <div class="field"><label for="itemBonusQty">كمية البونص</label><input id="itemBonusQty" type="number" min="0" step="1" inputmode="numeric" value="0"></div>
+            <div class="field"><label for="itemUnitPrice">سعر الوحدة</label><input id="itemUnitPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
           </div>
-
-          <button id="addItemBtn" class="secondary-button full-button" type="button">
-            إضافة الصنف
-          </button>
+          <button id="addItemBtn" class="secondary-button full-button" type="button">إضافة الصنف</button>
         </div>
-
-        <!-- INVOICE ITEMS -->
         <div class="panel">
-          <div class="subsection-heading">
-            <div>
-              <h3>أصناف الفاتورة</h3>
-              <span class="muted-text">راجع الكميات والأسعار قبل الحفظ</span>
-            </div>
-            <span id="invoiceItemCount" class="count-badge">0</span>
-          </div>
-
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>الصنف</th>
-                  <th>مدفوع</th>
-                  <th>بونص</th>
-                  <th>الإجمالي</th>
-                  <th>السعر</th>
-                  <th>القيمة</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="invoiceItemsBody">
-                <tr>
-                  <td colspan="7" class="empty-cell">لم تتم إضافة أصناف بعد</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="invoice-total">
-            <span>إجمالي الفاتورة</span>
-            <strong id="invoiceTotal">0 د.ع</strong>
-          </div>
-
-          <button id="saveInvoiceBtn" class="primary-button full-button" type="button">
-            حفظ الفاتورة
-          </button>
+          <div class="subsection-heading"><div><h2>أصناف الفاتورة</h2><span class="muted-text">القيمة تحسب من الكمية المدفوعة × سعر الوحدة</span></div><span id="invoiceItemCount" class="count-badge">0</span></div>
+          <div id="invoiceItemsList" class="invoice-items-list"><p class="empty-state">لم تتم إضافة أصناف بعد</p></div>
+          <div class="invoice-total"><span>إجمالي الفاتورة</span><strong id="invoiceTotal">0 د.ع</strong></div>
+          <button id="saveInvoiceBtn" class="primary-button full-button" type="button">حفظ الفاتورة</button>
+          <button id="resetInvoiceBtn" class="text-button full-button" type="button">تفريغ نموذج الفاتورة</button>
         </div>
       </section>
 
-      <!-- RETURNS PAGE -->
-      <section class="page-section" id="page-return" hidden>
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">المرتجعات</span>
-            <h2>تسجيل مردود</h2>
-            <p>تسجيل قيمة المواد المعادة إلى المورد</p>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="form-grid">
-            <div class="field">
-              <label for="returnType">فئة المردود</label>
-              <select id="returnType">
-                <option value="medicine">الأدوية</option>
-                <option value="general">قديم + مواد عامة</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="returnDate">تاريخ المردود</label>
-              <input id="returnDate" type="date">
-            </div>
-
-            <div class="field">
-              <label for="returnInvoice">الفاتورة الأصلية</label>
-              <select id="returnInvoice">
-                <option value="">بدون ربط بفاتورة</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="returnNumber">رقم مستند المردود</label>
-              <input id="returnNumber" type="text" placeholder="اختياري">
-            </div>
-
-            <div class="field">
-              <label for="returnAmount">قيمة المردود</label>
-              <input id="returnAmount" type="number" min="0" step="any" placeholder="0">
-            </div>
-
-            <div class="field">
-              <label for="returnNotes">ملاحظات</label>
-              <input id="returnNotes" type="text" placeholder="تفاصيل المردود">
-            </div>
-          </div>
-
-          <div id="returnCapacityInfo" class="info-strip">
-            اختر الفاتورة لمعرفة القيمة المتاحة للمردود
-          </div>
-
-          <button id="saveReturnBtn" class="primary-button full-button" type="button">
-            حفظ المردود
-          </button>
-        </div>
+      <section class="page-section" id="page-return" data-page-panel="return" hidden>
+        <div class="section-heading"><div><span class="eyebrow">المرتجعات</span><h1>تسجيل مردود</h1><p>المردودات مستقلة عن الخصومات والتسديدات</p></div></div>
+        <div class="panel"><div class="form-grid">
+          <div class="field"><label for="returnType">فئة المردود</label><select id="returnType"><option value="medicine">الأدوية</option><option value="general">قديم + مواد عامة</option></select></div>
+          <div class="field"><label for="returnDate">تاريخ المردود</label><input id="returnDate" type="date"></div>
+          <div class="field field-wide"><label for="returnInvoice">الفاتورة الأصلية</label><select id="returnInvoice"><option value="">اختر الفاتورة (اختياري)</option></select></div>
+          <div class="field"><label for="returnAmount">قيمة المردود</label><input id="returnAmount" type="number" min="0.01" step="any" inputmode="decimal" placeholder="0"></div>
+          <div class="field"><label for="returnNumber">رقم مستند المردود</label><input id="returnNumber" type="text" placeholder="اختياري"></div>
+          <div class="field field-wide"><label for="returnNotes">ملاحظات</label><input id="returnNotes" type="text" placeholder="تفاصيل المردود"></div>
+        </div><div id="returnCapacityInfo" class="info-strip">اختر الفئة أو الفاتورة لمعرفة الحد المتاح للمردود</div><button id="saveReturnBtn" class="primary-button full-button" type="button">حفظ المردود</button></div>
       </section>
 
-      <!-- PAYMENTS PAGE -->
-      <section class="page-section" id="page-payment" hidden>
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">الحسابات المالية</span>
-            <h2>تسديد حساب المورد</h2>
-            <p>الخصم والتسديد لكل فئة بصورة مستقلة</p>
-          </div>
+      <section class="page-section" id="page-payment" data-page-panel="payment" hidden>
+        <div class="section-heading"><div><span class="eyebrow">الحسابات المالية</span><h1>تسديد حساب المورد</h1><p>الخصم مستقل لكل فئة ويُسجل ضمن تفاصيل العملية</p></div></div>
+        <div class="panel"><div class="balance-breakdown">
+          <div class="balance-row"><span>رصيد الأدوية قبل الخصم</span><strong id="medicineBalance">0 د.ع</strong></div>
+          <div class="balance-row"><span>رصيد القديم والمواد العامة قبل الخصم</span><strong id="generalBalance">0 د.ع</strong></div>
+          <div class="balance-row total-row"><span>إجمالي رصيد المورد</span><strong id="totalBalance">0 د.ع</strong></div>
         </div>
-
-        <div class="panel">
-          <div class="balance-breakdown">
-            <div class="balance-row">
-              <span>رصيد الأدوية</span>
-              <strong id="medicineBalance">0 د.ع</strong>
-            </div>
-            <div class="balance-row">
-              <span>رصيد القديم والمواد العامة</span>
-              <strong id="generalBalance">0 د.ع</strong>
-            </div>
-            <div class="balance-row total-row">
-              <span>إجمالي رصيد المورد</span>
-              <strong id="totalBalance">0 د.ع</strong>
-            </div>
-          </div>
-
-          <div class="subsection-heading">
-            <h3>الخصم عند التسديد</h3>
-            <span class="muted-text">نسبة مستقلة لكل فئة</span>
-          </div>
-
-          <div class="form-grid">
-            <div class="field">
-              <label for="medicineDiscount">خصم الأدوية %</label>
-              <input id="medicineDiscount" type="number" min="0" max="100" step="0.01" value="0">
-            </div>
-
-            <div class="field">
-              <label for="generalDiscount">خصم القديم والمواد العامة %</label>
-              <input id="generalDiscount" type="number" min="0" max="100" step="0.01" value="0">
-            </div>
-          </div>
-
-          <div class="payment-calculation">
-            <div class="balance-row">
-              <span>الأدوية بعد الخصم</span>
-              <strong id="medicineAfterDiscount">0 د.ع</strong>
-            </div>
-            <div class="balance-row">
-              <span>المواد العامة بعد الخصم</span>
-              <strong id="generalAfterDiscount">0 د.ع</strong>
-            </div>
-            <div class="balance-row total-row">
-              <span>إجمالي المستحق بعد الخصم</span>
-              <strong id="paymentDue">0 د.ع</strong>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="paymentAmount">المبلغ المسدد فعلياً</label>
-            <input id="paymentAmount" type="number" min="0" step="any" placeholder="المبلغ">
-          </div>
-
-          <div class="field">
-            <label for="paymentDate">تاريخ التسديد</label>
-            <input id="paymentDate" type="date">
-          </div>
-
-          <div class="field">
-            <label for="paymentNotes">ملاحظات</label>
-            <input id="paymentNotes" type="text" placeholder="اختياري">
-          </div>
-
-          <button id="savePaymentBtn" class="primary-button full-button" type="button">
-            تسجيل التسديد
-          </button>
-
-          <p class="hint-text">
-            يُحسب الخصم على كامل رصيد كل فئة قبل التسديد، وليس على مبلغ الدفعة الجزئية.
-          </p>
-        </div>
+        <div class="subsection-heading"><h2>نسبة الخصم عند التسديد</h2></div>
+        <div class="form-grid"><div class="field"><label for="medicineDiscount">خصم الأدوية %</label><input id="medicineDiscount" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="0"></div><div class="field"><label for="generalDiscount">خصم المواد العامة %</label><input id="generalDiscount" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="0"></div></div>
+        <div class="payment-calculation"><div class="balance-row"><span>الأدوية بعد الخصم</span><strong id="medicineAfterDiscount">0 د.ع</strong></div><div class="balance-row"><span>المواد العامة بعد الخصم</span><strong id="generalAfterDiscount">0 د.ع</strong></div><div class="balance-row total-row"><span>إجمالي المستحق بعد الخصم</span><strong id="paymentDue">0 د.ع</strong></div></div>
+        <div class="field"><label for="paymentAmount">المبلغ المسدد فعلياً</label><input id="paymentAmount" type="number" min="0.01" step="any" inputmode="decimal" placeholder="المبلغ"></div>
+        <div class="field"><label for="paymentDate">تاريخ التسديد</label><input id="paymentDate" type="date"></div>
+        <div class="field"><label for="paymentNotes">ملاحظات</label><input id="paymentNotes" type="text" placeholder="اختياري"></div>
+        <div id="paymentPreviewMessage" class="info-strip">أدخل نسب الخصم والمبلغ لعرض توزيع التسديد</div>
+        <button id="savePaymentBtn" class="primary-button full-button" type="button">تسجيل التسديد</button>
+        <p class="hint-text">يُطبق الخصم على رصيد الفئة قبل التسديد. في التسديد الجزئي يوزع المبلغ بعد الخصم بنسبة صافي مستحق كل فئة، ويُخصم أي رصيد دائن من الفئة الأخرى عند حساب صافي المورد، وتُحفظ تفاصيل الحساب في سجل العملية.</p></div>
       </section>
 
-      <!-- REPORTS PAGE -->
-      <section class="page-section" id="page-reports" hidden>
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">التحليل المالي</span>
-            <h2>التقارير والإحصائيات</h2>
-            <p>تحليل المشتريات حسب الشهر والفئة</p>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="form-grid">
-            <div class="field">
-              <label for="reportMonth">الشهر</label>
-              <input id="reportMonth" type="month">
-            </div>
-            <div class="field field-action">
-              <label>&nbsp;</label>
-              <button id="loadReportBtn" class="secondary-button" type="button">
-                عرض التقرير
-              </button>
-            </div>
-          </div>
-
+      <section class="page-section" id="page-reports" data-page-panel="reports" hidden>
+        <div class="section-heading"><div><span class="eyebrow">التحليل المالي</span><h1>التقارير والإحصائيات</h1><p>عرض الفواتير والمردودات والتسديدات حسب الفترة</p></div></div>
+        <div class="panel"><div class="form-grid"><div class="field"><label for="reportMonth">الشهر</label><input id="reportMonth" type="month"></div><div class="field field-action"><label aria-hidden="true">&nbsp;</label><button id="loadReportBtn" class="secondary-button" type="button">عرض التقرير</button></div></div>
           <div class="report-grid">
-            <article class="report-card">
-              <span>مشتريات الأدوية</span>
-              <strong id="reportMedicine">0</strong>
-            </article>
-            <article class="report-card">
-              <span>مشتريات المواد العامة</span>
-              <strong id="reportGeneral">0</strong>
-            </article>
-            <article class="report-card">
-              <span>عدد الفواتير</span>
-              <strong id="reportInvoiceCount">0</strong>
-            </article>
-            <article class="report-card">
-              <span>عدد الأصناف</span>
-              <strong id="reportItemCount">0</strong>
-            </article>
-            <article class="report-card">
-              <span>قيمة المردودات</span>
-              <strong id="reportReturns">0</strong>
-            </article>
-            <article class="report-card">
-              <span>كمية البونص</span>
-              <strong id="reportBonus">0</strong>
-            </article>
-            <article class="report-card">
-              <span>التسديدات</span>
-              <strong id="reportPayments">0</strong>
-            </article>
-            <article class="report-card">
-              <span>الخصومات</span>
-              <strong id="reportDiscounts">0</strong>
-            </article>
+            <article class="report-card"><span>مشتريات الأدوية</span><strong id="reportMedicine">0</strong></article><article class="report-card"><span>مشتريات المواد العامة</span><strong id="reportGeneral">0</strong></article><article class="report-card"><span>عدد الفواتير</span><strong id="reportInvoiceCount">0</strong></article><article class="report-card"><span>عدد الأصناف</span><strong id="reportItemCount">0</strong></article><article class="report-card"><span>قيمة المردودات</span><strong id="reportReturns">0</strong></article><article class="report-card"><span>كمية البونص</span><strong id="reportBonus">0</strong></article><article class="report-card"><span>التسديدات</span><strong id="reportPayments">0</strong></article><article class="report-card"><span>الخصومات</span><strong id="reportDiscounts">0</strong></article>
           </div>
-
-          <div class="subsection-heading">
-            <h3>تفاصيل الفواتير</h3>
-          </div>
-
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>رقم الفاتورة</th>
-                  <th>الفئة</th>
-                  <th>عدد الأصناف</th>
-                  <th>الإجمالي</th>
-                </tr>
-              </thead>
-              <tbody id="reportInvoicesBody">
-                <tr>
-                  <td colspan="5" class="empty-cell">اختر الشهر لعرض التقرير</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="subsection-heading">
-            <h3>تحليل الأصناف</h3>
-          </div>
-
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>الصنف</th>
-                  <th>الفئة</th>
-                  <th>مدفوع</th>
-                  <th>بونص</th>
-                  <th>الإجمالي</th>
-                  <th>القيمة</th>
-                </tr>
-              </thead>
-              <tbody id="reportItemsBody">
-                <tr>
-                  <td colspan="6" class="empty-cell">لا توجد بيانات</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="subsection-heading">
-            <h3>الأصناف الأكثر شراءً</h3>
-          </div>
-
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>الصنف</th>
-                  <th>إجمالي القطع</th>
-                  <th>مرات الشراء</th>
-                  <th>القيمة</th>
-                </tr>
-              </thead>
-              <tbody id="reportTopItemsBody">
-                <tr>
-                  <td colspan="4" class="empty-cell">لا توجد بيانات</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <button id="exportCsvBtn" class="secondary-button full-button" type="button">
-            تصدير التقرير CSV
-          </button>
+          <div class="subsection-heading"><h2>تفاصيل الفواتير</h2></div><div id="reportInvoicesList" class="record-list"><p class="empty-state">اختر الشهر لعرض التقرير</p></div>
+          <div class="subsection-heading"><h2>تحليل الأصناف</h2></div><div id="reportItemsList" class="record-list"><p class="empty-state">لا توجد بيانات</p></div>
+          <div class="subsection-heading"><h2>الأصناف الأكثر شراءً</h2></div><div id="reportTopItemsList" class="record-list"><p class="empty-state">لا توجد بيانات</p></div>
+          <button id="exportCsvBtn" class="secondary-button full-button" type="button">تصدير التقرير CSV</button>
         </div>
       </section>
 
-      <!-- ARCHIVE PAGE -->
-      <section class="page-section" id="page-archive" hidden>
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">السجل</span>
-            <h2>الأرشيف</h2>
-            <p>جميع الفواتير والمردودات والتسديدات</p>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="field">
-            <label for="archiveSearch">البحث في الأرشيف</label>
-            <input id="archiveSearch" type="search" placeholder="رقم الفاتورة أو اسم الصنف">
-          </div>
-
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>الرقم</th>
-                  <th>العملية</th>
-                  <th>الفئة</th>
-                  <th>القيمة</th>
-                  <th>التفاصيل</th>
-                </tr>
-              </thead>
-              <tbody id="archiveBody">
-                <tr>
-                  <td colspan="6" class="empty-cell">لا توجد عمليات مسجلة</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <section class="page-section" id="page-archive" data-page-panel="archive" hidden>
+        <div class="section-heading"><div><span class="eyebrow">السجل</span><h1>الأرشيف</h1><p>الفواتير والمردودات والتسديدات</p></div></div>
+        <div class="panel"><div class="field"><label for="archiveSearch">البحث في الأرشيف</label><input id="archiveSearch" type="search" placeholder="رقم الفاتورة أو اسم الصنف أو الملاحظات"></div><div id="archiveList" class="record-list"><p class="empty-state">لا توجد عمليات مسجلة</p></div></div>
       </section>
 
-      <!-- SETTINGS PAGE -->
-      <section class="page-section" id="page-settings" hidden>
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">إدارة البيانات</span>
-            <h2>الإعدادات والنسخ الاحتياطي</h2>
-            <p>إعدادات المورد وحماية بياناتك</p>
-          </div>
-        </div>
-
-        <div class="panel">
-          <h3>بيانات المورد</h3>
-
-          <div class="field">
-            <label for="supplierName">اسم المورد</label>
-            <input id="supplierName" type="text" placeholder="اسم المورد">
-          </div>
-
-          <button id="saveSettingsBtn" class="secondary-button full-button" type="button">
-            حفظ الإعدادات
-          </button>
-
-          <div class="divider"></div>
-
-          <h3>النسخ الاحتياطي</h3>
-          <p class="hint-text">
-            بيانات التطبيق محفوظة محلياً على جهازك. أنشئ نسخة احتياطية دورياً
-            حتى تتمكن من استعادة بياناتك عند تغيير الجهاز أو المتصفح.
-          </p>
-
-          <button id="backupBtn" class="primary-button full-button" type="button">
-            تصدير نسخة احتياطية
-          </button>
-
-          <div class="field">
-            <label for="restoreFile">ملف النسخة الاحتياطية</label>
-            <input id="restoreFile" type="file" accept=".json,application/json">
-          </div>
-
-          <button id="restoreBtn" class="secondary-button full-button" type="button">
-            استعادة النسخة الاحتياطية
-          </button>
-
-          <div class="divider"></div>
-
-          <button id="clearDataBtn" class="danger-button full-button" type="button">
-            حذف جميع البيانات
-          </button>
-        </div>
-
-        <div class="panel about-panel">
-          <span class="eyebrow">PHARMACY INVOICES</span>
-          <h3>إدارة مشترياتك بوضوح</h3>
-          <p>نظام محلي لإدارة الفواتير والحسابات والتقارير.</p>
-          <span class="version-label">Version 1.0</span>
-        </div>
+      <section class="page-section" id="page-settings" data-page-panel="settings" hidden>
+        <div class="section-heading"><div><span class="eyebrow">إدارة البيانات</span><h1>الإعدادات والنسخ الاحتياطي</h1><p>إعدادات المورد وحماية بياناتك</p></div></div>
+        <div class="panel"><h2>بيانات المورد</h2><div class="field"><label for="supplierName">اسم المورد</label><input id="supplierName" type="text" placeholder="اسم المورد"></div><button id="saveSettingsBtn" class="secondary-button full-button" type="button">حفظ الإعدادات</button>
+          <div class="divider"></div><h2>النسخ الاحتياطي</h2><p class="hint-text">أنشئ نسخة احتياطية دورياً. البيانات محفوظة محلياً في هذا المتصفح، ولا تُرفع إلى خادم.</p><button id="backupBtn" class="primary-button full-button" type="button">تصدير نسخة احتياطية JSON</button><div class="field"><label for="restoreFile">ملف النسخة الاحتياطية</label><input id="restoreFile" type="file" accept=".json,application/json"></div><button id="restoreBtn" class="secondary-button full-button" type="button">استعادة النسخة الاحتياطية</button>
+          <div class="divider"></div><button id="clearDataBtn" class="danger-button full-button" type="button">حذف جميع البيانات</button>
+        </div><div class="panel about-panel"><span class="eyebrow">PHARMACY INVOICES</span><h2>إدارة مشترياتك بوضوح</h2><p>نظام محلي لإدارة الفواتير والحسابات والتقارير.</p><span class="version-label">Version 1.0</span></div>
       </section>
-
     </main>
 
-    <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav" aria-label="التنقل الرئيسي">
-      <button class="nav-item active" type="button" data-page="invoice">
-        <span class="nav-icon">＋</span>
-        <small>الفواتير</small>
-      </button>
-
-      <button class="nav-item" type="button" data-page="return">
-        <span class="nav-icon">↩</span>
-        <small>المردود</small>
-      </button>
-
-      <button class="nav-item" type="button" data-page="payment">
-        <span class="nav-icon">د.ع</span>
-        <small>التسديد</small>
-      </button>
-
-      <button class="nav-item" type="button" data-page="archive">
-        <span class="nav-icon">▤</span>
-        <small>الأرشيف</small>
-      </button>
-
-      <button class="nav-item" type="button" data-page="settings">
-        <span class="nav-icon">⚙</span>
-        <small>الإعدادات</small>
-      </button>
+      <button class="nav-item" type="button" data-page="dashboard"><span class="nav-icon">⌂</span><small>الرئيسية</small></button>
+      <button class="nav-item" type="button" data-page="invoice"><span class="nav-icon">＋</span><small>الفواتير</small></button>
+      <button class="nav-item" type="button" data-page="return"><span class="nav-icon">↩</span><small>المردود</small></button>
+      <button class="nav-item" type="button" data-page="payment"><span class="nav-icon">د.ع</span><small>التسديد</small></button>
+      <button class="nav-item" type="button" data-page="archive"><span class="nav-icon">▤</span><small>الأرشيف</small></button>
+      <button class="nav-item" type="button" data-page="settings"><span class="nav-icon">⚙</span><small>المزيد</small></button>
     </nav>
-
   </div>
-
-  <!-- GLOBAL TOAST -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <!-- APPLICATION SCRIPTS -->
   <script src="db.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-  <script src="ocr.js"></script>
-  <script src="invoice.js"></script>
-  <script src="returns.js"></script>
-  <script src="payments.js"></script>
-  <script src="reports.js"></script>
-  <script src="app.js"></script>
-
-  <!-- SERVICE WORKER -->
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js")
-          .then(() => console.info("Service Worker registered"))
-          .catch(error => console.error("Service Worker error:", error));
-      });
-    }
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
+  <script src="ocr.js" defer></script>
+  <script src="invoice.js" defer></script>
+  <script src="returns.js" defer></script>
+  <script src="payments.js" defer></script>
+  <script src="reports.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
