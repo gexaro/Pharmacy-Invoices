@@ -7,17 +7,19 @@
 ===================================== */
 
 const PMApp = (() => {
-
   const $ = (id) => document.getElementById(id);
 
   let initialized = false;
+
   let currentBalances = {
     medicine: 0,
     general: 0
   };
 
+  let returnInvoices = [];
+
   /* =====================================
-     Helpers
+     General helpers
   ===================================== */
 
   function numberValue(value) {
@@ -87,9 +89,7 @@ const PMApp = (() => {
   ===================================== */
 
   function navigate(pageName) {
-    const pages = document.querySelectorAll('[id^="page-"]');
-
-    pages.forEach(page => {
+    document.querySelectorAll('[id^="page-"]').forEach(page => {
       const active = page.id === `page-${pageName}`;
 
       page.classList.toggle("active", active);
@@ -115,9 +115,13 @@ const PMApp = (() => {
       refreshPaymentPreview();
     }
 
+    if (pageName === "return") {
+      loadReturnInvoices();
+    }
+
     window.scrollTo({
       top: 0,
-      behavior: "instant"
+      behavior: "auto"
     });
   }
 
@@ -162,7 +166,7 @@ const PMApp = (() => {
     }
 
     try {
-      localStorage.setItem("expiry-manager-theme", theme);
+      localStorage.setItem("pharmacy-invoices-theme", theme);
     } catch (error) {
       console.warn("Theme preference could not be saved:", error);
     }
@@ -172,7 +176,7 @@ const PMApp = (() => {
     let theme = "light";
 
     try {
-      theme = localStorage.getItem("expiry-manager-theme") || "light";
+      theme = localStorage.getItem("pharmacy-invoices-theme") || "light";
     } catch (error) {
       console.warn("Theme preference unavailable:", error);
     }
@@ -181,7 +185,6 @@ const PMApp = (() => {
 
     $("themeToggle")?.addEventListener("click", () => {
       const dark = document.body.classList.contains("dark-theme");
-
       applyTheme(dark ? "light" : "dark");
     });
   }
@@ -202,7 +205,6 @@ const PMApp = (() => {
       general: 0
     };
 
-    // Add original invoice values.
     invoices.forEach(invoice => {
       if (invoice.category === "medicine") {
         balances.medicine += numberValue(invoice.total);
@@ -211,7 +213,6 @@ const PMApp = (() => {
       }
     });
 
-    // Returns reduce the corresponding category balance.
     returns.forEach(item => {
       if (item.category === "medicine") {
         balances.medicine -= numberValue(item.amount);
@@ -220,12 +221,10 @@ const PMApp = (() => {
       }
     });
 
-    // Subtract payments and discounts already recorded.
     payments.forEach(payment => {
       balances.medicine -= numberValue(payment.medicineDiscount);
       balances.general -= numberValue(payment.generalDiscount);
 
-      // New payment records contain category-specific allocations.
       if (
         payment.medicinePaid !== undefined ||
         payment.generalPaid !== undefined
@@ -249,9 +248,10 @@ const PMApp = (() => {
       }
     });
 
+    // Negative balances are preserved as supplier credit.
     currentBalances = {
-      medicine: roundMoney(Math.max(0, balances.medicine)),
-      general: roundMoney(Math.max(0, balances.general))
+      medicine: roundMoney(balances.medicine),
+      general: roundMoney(balances.general)
     };
 
     return currentBalances;
@@ -272,17 +272,9 @@ const PMApp = (() => {
 
     const month = currentMonth();
 
-    const monthlyInvoices = invoices.filter(
-      item => item.month === month
-    );
-
-    const monthlyReturns = returns.filter(
-      item => item.month === month
-    );
-
-    const monthlyPayments = payments.filter(
-      item => item.month === month
-    );
+    const monthlyInvoices = invoices.filter(item => item.month === month);
+    const monthlyReturns = returns.filter(item => item.month === month);
+    const monthlyPayments = payments.filter(item => item.month === month);
 
     const monthlyPurchases = monthlyInvoices.reduce(
       (sum, item) => sum + numberValue(item.total),
@@ -327,9 +319,7 @@ const PMApp = (() => {
   function getDiscountRate(id) {
     const value = numberValue($(id)?.value);
 
-    if (value < 0 || value > 100) {
-      return null;
-    }
+    if (value < 0 || value > 100) return null;
 
     return value;
   }
@@ -359,16 +349,20 @@ const PMApp = (() => {
       if ($("paymentDue")) {
         $("paymentDue").textContent = "نسبة الخصم يجب أن تكون بين 0 و100";
       }
-
       return;
     }
 
+    // Discounts apply only to positive category balances.
     const medicineAfter = roundMoney(
-      medicineBalance * (1 - medicineRate / 100)
+      medicineBalance > 0
+        ? medicineBalance * (1 - medicineRate / 100)
+        : medicineBalance
     );
 
     const generalAfter = roundMoney(
-      generalBalance * (1 - generalRate / 100)
+      generalBalance > 0
+        ? generalBalance * (1 - generalRate / 100)
+        : generalBalance
     );
 
     const due = roundMoney(medicineAfter + generalAfter);
@@ -382,7 +376,7 @@ const PMApp = (() => {
     }
 
     if ($("paymentDue")) {
-      $("paymentDue").textContent = money(due);
+      $("paymentDue").textContent = money(Math.max(0, due));
     }
   }
 
@@ -405,7 +399,7 @@ const PMApp = (() => {
 
     const amount = roundMoney(numberValue($("paymentAmount")?.value));
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (amount <= 0) {
       notify("أدخل مبلغ تسديد صحيحاً");
       return;
     }
@@ -420,18 +414,17 @@ const PMApp = (() => {
     setButtonLoading(button, true, "حفظ التسديد");
 
     try {
-      // Always calculate the latest balances before recording payment.
       const balances = await calculateBalances();
 
       const medicineBefore = balances.medicine;
       const generalBefore = balances.general;
 
       const medicineDiscount = roundMoney(
-        medicineBefore * medicineRate / 100
+        Math.max(0, medicineBefore) * medicineRate / 100
       );
 
       const generalDiscount = roundMoney(
-        generalBefore * generalRate / 100
+        Math.max(0, generalBefore) * generalRate / 100
       );
 
       const medicineAfter = roundMoney(
@@ -442,10 +435,13 @@ const PMApp = (() => {
         generalBefore - generalDiscount
       );
 
-      const totalDue = roundMoney(medicineAfter + generalAfter);
+      // Supplier credit offsets the positive balances.
+      const totalDue = roundMoney(
+        medicineAfter + generalAfter
+      );
 
       if (totalDue <= 0) {
-        notify("لا يوجد رصيد مستحق للتسديد");
+        notify("لا يوجد مبلغ مستحق للتسديد؛ يوجد رصيد دائن أو لا يوجد دين");
         return;
       }
 
@@ -454,29 +450,38 @@ const PMApp = (() => {
         return;
       }
 
-      // Allocate partial payment proportionally between categories.
+      const positiveTotal =
+        Math.max(0, medicineAfter) +
+        Math.max(0, generalAfter);
+
       let medicinePaid = 0;
       let generalPaid = 0;
 
-      if (totalDue > 0) {
+      if (positiveTotal > 0) {
         medicinePaid = roundMoney(
-          amount * medicineAfter / totalDue
+          amount * Math.max(0, medicineAfter) / positiveTotal
         );
 
         generalPaid = roundMoney(amount - medicinePaid);
       }
 
-      // Avoid tiny rounding differences exceeding a category balance.
-      if (medicinePaid > medicineAfter) {
-        const excess = medicinePaid - medicineAfter;
-        medicinePaid = medicineAfter;
+      if (medicinePaid > Math.max(0, medicineAfter)) {
+        const excess = medicinePaid - Math.max(0, medicineAfter);
+        medicinePaid = Math.max(0, medicineAfter);
         generalPaid = roundMoney(generalPaid + excess);
       }
 
-      if (generalPaid > generalAfter) {
-        const excess = generalPaid - generalAfter;
-        generalPaid = generalAfter;
+      if (generalPaid > Math.max(0, generalAfter)) {
+        const excess = generalPaid - Math.max(0, generalAfter);
+        generalPaid = Math.max(0, generalAfter);
         medicinePaid = roundMoney(medicinePaid + excess);
+      }
+
+      if (
+        medicinePaid > Math.max(0, medicineAfter) + 0.01 ||
+        generalPaid > Math.max(0, generalAfter) + 0.01
+      ) {
+        throw new Error("تعذر توزيع مبلغ التسديد على الفئتين");
       }
 
       const payment = {
@@ -517,10 +522,7 @@ const PMApp = (() => {
 
       if ($("paymentAmount")) $("paymentAmount").value = "";
       if ($("paymentNotes")) $("paymentNotes").value = "";
-
-      if ($("paymentDate")) {
-        $("paymentDate").value = todayString();
-      }
+      if ($("paymentDate")) $("paymentDate").value = todayString();
 
       if ($("medicineDiscount")) $("medicineDiscount").value = "0";
       if ($("generalDiscount")) $("generalDiscount").value = "0";
@@ -546,6 +548,106 @@ const PMApp = (() => {
   }
 
   /* =====================================
+     Returns: invoice selector
+  ===================================== */
+
+  async function loadReturnInvoices() {
+    const select = $("returnInvoice");
+    const category = $("returnType")?.value || "medicine";
+
+    if (!select) return;
+
+    try {
+      const invoices = await dbGetAll(DB_STORES.INVOICES);
+
+      returnInvoices = invoices.filter(
+        invoice => invoice.category === category
+      );
+
+      const previousValue = select.value;
+
+      select.replaceChildren();
+
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "بدون ربط بفاتورة";
+      select.appendChild(emptyOption);
+
+      returnInvoices
+        .sort((a, b) =>
+          String(b.date || "").localeCompare(String(a.date || ""))
+        )
+        .forEach(invoice => {
+          const option = document.createElement("option");
+
+          option.value = String(invoice.id);
+
+          option.textContent =
+            `${invoice.invoiceNumber || "بدون رقم"} — ` +
+            `${invoice.date || ""} — ${money(invoice.total)}`;
+
+          select.appendChild(option);
+        });
+
+      if (
+        previousValue &&
+        returnInvoices.some(item => String(item.id) === previousValue)
+      ) {
+        select.value = previousValue;
+      }
+
+    } catch (error) {
+      console.error("Return invoices loading error:", error);
+      notify("تعذر تحميل قائمة الفواتير");
+    }
+  }
+
+  async function getReturnCapacity(category, invoiceId) {
+    const [invoices, returns] = await Promise.all([
+      dbGetAll(DB_STORES.INVOICES),
+      dbGetAll(DB_STORES.RETURNS)
+    ]);
+
+    if (invoiceId) {
+      const invoice = invoices.find(
+        item => Number(item.id) === Number(invoiceId)
+      );
+
+      if (!invoice || invoice.category !== category) {
+        return 0;
+      }
+
+      const previousReturns = returns
+        .filter(item =>
+          Number(item.invoiceId) === Number(invoiceId) ||
+          (
+            !item.invoiceId &&
+            item.invoiceNumber &&
+            item.invoiceNumber === invoice.invoiceNumber &&
+            item.category === category
+          )
+        )
+        .reduce((total, item) => total + numberValue(item.amount), 0);
+
+      return roundMoney(
+        Math.max(0, numberValue(invoice.total) - previousReturns)
+      );
+    }
+
+    const categoryPurchases = invoices
+      .filter(item => item.category === category)
+      .reduce((total, item) => total + numberValue(item.total), 0);
+
+    const categoryReturns = returns
+      .filter(item => item.category === category)
+      .reduce((total, item) => total + numberValue(item.amount), 0);
+
+    return roundMoney(
+      Math.max(0, categoryPurchases - categoryReturns)
+    );
+  }
+
+  /* =====================================
      Save return
   ===================================== */
 
@@ -558,7 +660,9 @@ const PMApp = (() => {
     const date = $("returnDate")?.value || todayString();
     const amount = roundMoney(numberValue($("returnAmount")?.value));
 
-    const invoiceNumber = $("returnInvoice")?.value.trim() || "";
+    const invoiceIdValue = $("returnInvoice")?.value || "";
+    const invoiceId = invoiceIdValue ? Number(invoiceIdValue) : null;
+
     const returnNumber = $("returnNumber")?.value.trim() || "";
     const notes = $("returnNotes")?.value.trim() || "";
 
@@ -580,12 +684,26 @@ const PMApp = (() => {
     setButtonLoading(button, true, "حفظ المردود");
 
     try {
-      const balances = await calculateBalances();
-      const availableBalance = balances[category];
+      const capacity = await getReturnCapacity(category, invoiceId);
 
-      if (amount > availableBalance + 0.01) {
-        notify("قيمة المردود أكبر من رصيد الفئة المتاح");
+      if (amount > capacity + 0.01) {
+        notify(
+          `قيمة المردود أكبر من قيمة المشتريات المتاحة للمردود (${money(capacity)})`
+        );
         return;
+      }
+
+      let invoiceNumber = "";
+
+      if (invoiceId) {
+        const invoice = await dbGet(DB_STORES.INVOICES, invoiceId);
+
+        if (!invoice || invoice.category !== category) {
+          notify("الفاتورة المحددة غير صالحة");
+          return;
+        }
+
+        invoiceNumber = invoice.invoiceNumber || "";
       }
 
       const returnRecord = {
@@ -593,6 +711,7 @@ const PMApp = (() => {
         date,
         month: date.slice(0, 7),
 
+        invoiceId,
         invoiceNumber,
         returnNumber,
 
@@ -608,12 +727,10 @@ const PMApp = (() => {
       if ($("returnInvoice")) $("returnInvoice").value = "";
       if ($("returnNumber")) $("returnNumber").value = "";
       if ($("returnNotes")) $("returnNotes").value = "";
-
-      if ($("returnDate")) {
-        $("returnDate").value = todayString();
-      }
+      if ($("returnDate")) $("returnDate").value = todayString();
 
       await refreshDashboard();
+      await loadReturnInvoices();
 
       notify("تم حفظ المردود بنجاح");
 
@@ -747,6 +864,7 @@ const PMApp = (() => {
 
       await refreshDashboard();
       await loadSettings();
+      await loadReturnInvoices();
 
       await PMReports.loadReport();
       await PMReports.loadArchive("");
@@ -790,6 +908,7 @@ const PMApp = (() => {
 
       await refreshDashboard();
       await loadSettings();
+      await loadReturnInvoices();
 
       await PMReports.loadReport();
       await PMReports.loadArchive("");
@@ -812,13 +931,11 @@ const PMApp = (() => {
   ===================================== */
 
   function initializeDates() {
-    const dateIds = [
+    [
       "invoiceDate",
       "returnDate",
       "paymentDate"
-    ];
-
-    dateIds.forEach(id => {
+    ].forEach(id => {
       const input = $(id);
 
       if (input && !input.value) {
@@ -837,16 +954,13 @@ const PMApp = (() => {
 
   function initializeEvents() {
     $("saveReturnBtn")?.addEventListener("click", saveReturn);
-
     $("savePaymentBtn")?.addEventListener("click", savePayment);
-
     $("saveSettingsBtn")?.addEventListener("click", saveSettings);
-
     $("backupBtn")?.addEventListener("click", createBackup);
-
     $("restoreBtn")?.addEventListener("click", restoreBackup);
-
     $("clearDataBtn")?.addEventListener("click", clearAllData);
+
+    $("returnType")?.addEventListener("change", loadReturnInvoices);
 
     $("medicineDiscount")?.addEventListener(
       "input",
@@ -868,6 +982,10 @@ const PMApp = (() => {
 
       if ($("page-archive")?.classList.contains("active")) {
         await PMReports.loadArchive($("archiveSearch")?.value || "");
+      }
+
+      if ($("page-return")?.classList.contains("active")) {
+        await loadReturnInvoices();
       }
     });
   }
@@ -891,6 +1009,7 @@ const PMApp = (() => {
 
       await loadSettings();
       await refreshDashboard();
+      await loadReturnInvoices();
 
       refreshPaymentPreview();
 
@@ -911,9 +1030,9 @@ const PMApp = (() => {
     calculateBalances,
     refreshPaymentPreview,
     savePayment,
-    saveReturn
+    saveReturn,
+    loadReturnInvoices
   };
-
 })();
 
 document.addEventListener("DOMContentLoaded", () => {
