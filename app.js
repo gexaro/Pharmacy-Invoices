@@ -18,9 +18,7 @@ const PMApp = (() => {
 
   let returnInvoices = [];
 
-  /* =====================================
-     General helpers
-  ===================================== */
+  /* General helpers */
 
   function numberValue(value) {
     const number = Number(value);
@@ -84,9 +82,7 @@ const PMApp = (() => {
     button.textContent = loading ? "جارٍ التنفيذ..." : originalText;
   }
 
-  /* =====================================
-     Navigation
-  ===================================== */
+  /* Navigation */
 
   function navigate(pageName) {
     document.querySelectorAll('[id^="page-"]').forEach(page => {
@@ -135,9 +131,7 @@ const PMApp = (() => {
     navigate("invoice");
   }
 
-  /* =====================================
-     Theme
-  ===================================== */
+  /* Theme */
 
   function applyTheme(theme) {
     const dark = theme === "dark";
@@ -162,7 +156,7 @@ const PMApp = (() => {
     const meta = document.querySelector('meta[name="theme-color"]');
 
     if (meta) {
-      meta.content = dark ? "#111B2E" : "#244638";
+      meta.content = dark ? "#101915" : "#244638";
     }
 
     try {
@@ -189,9 +183,7 @@ const PMApp = (() => {
     });
   }
 
-  /* =====================================
-     Supplier balance calculations
-  ===================================== */
+  /* Supplier balance calculations */
 
   async function calculateBalances() {
     const [invoices, returns, payments] = await Promise.all([
@@ -248,7 +240,6 @@ const PMApp = (() => {
       }
     });
 
-    // Negative balances are preserved as supplier credit.
     currentBalances = {
       medicine: roundMoney(balances.medicine),
       general: roundMoney(balances.general)
@@ -257,9 +248,7 @@ const PMApp = (() => {
     return currentBalances;
   }
 
-  /* =====================================
-     Dashboard
-  ===================================== */
+  /* Dashboard */
 
   async function refreshDashboard() {
     const balances = await calculateBalances();
@@ -312,9 +301,7 @@ const PMApp = (() => {
     return balances;
   }
 
-  /* =====================================
-     Payment preview
-  ===================================== */
+  /* Payment preview */
 
   function getDiscountRate(id) {
     const value = numberValue($(id)?.value);
@@ -352,7 +339,6 @@ const PMApp = (() => {
       return;
     }
 
-    // Discounts apply only to positive category balances.
     const medicineAfter = roundMoney(
       medicineBalance > 0
         ? medicineBalance * (1 - medicineRate / 100)
@@ -380,9 +366,7 @@ const PMApp = (() => {
     }
   }
 
-  /* =====================================
-     Save payment
-  ===================================== */
+  /* Save payment */
 
   async function savePayment() {
     const button = $("savePaymentBtn");
@@ -435,7 +419,6 @@ const PMApp = (() => {
         generalBefore - generalDiscount
       );
 
-      // Supplier credit offsets the positive balances.
       const totalDue = roundMoney(
         medicineAfter + generalAfter
       );
@@ -547,9 +530,7 @@ const PMApp = (() => {
     }
   }
 
-  /* =====================================
-     Returns: invoice selector
-  ===================================== */
+  /* Returns: invoice selector */
 
   async function loadReturnInvoices() {
     const select = $("returnInvoice");
@@ -602,54 +583,75 @@ const PMApp = (() => {
     }
   }
 
+  /* Return capacity validation */
+
   async function getReturnCapacity(category, invoiceId) {
     const [invoices, returns] = await Promise.all([
       dbGetAll(DB_STORES.INVOICES),
       dbGetAll(DB_STORES.RETURNS)
     ]);
 
-    if (invoiceId) {
-      const invoice = invoices.find(
-        item => Number(item.id) === Number(invoiceId)
-      );
+    const categoryInvoices = invoices.filter(
+      item => item.category === category
+    );
 
-      if (!invoice || invoice.category !== category) {
-        return 0;
-      }
+    const categoryReturns = returns.filter(
+      item => item.category === category
+    );
 
-      const previousReturns = returns
-        .filter(item =>
-          Number(item.invoiceId) === Number(invoiceId) ||
-          (
-            !item.invoiceId &&
-            item.invoiceNumber &&
-            item.invoiceNumber === invoice.invoiceNumber &&
-            item.category === category
-          )
-        )
-        .reduce((total, item) => total + numberValue(item.amount), 0);
+    const categoryPurchasesTotal = categoryInvoices.reduce(
+      (total, item) => total + numberValue(item.total),
+      0
+    );
 
-      return roundMoney(
-        Math.max(0, numberValue(invoice.total) - previousReturns)
-      );
+    const categoryReturnsTotal = categoryReturns.reduce(
+      (total, item) => total + numberValue(item.amount),
+      0
+    );
+
+    // Remaining amount for the entire category.
+    const categoryRemaining = roundMoney(
+      Math.max(0, categoryPurchasesTotal - categoryReturnsTotal)
+    );
+
+    // Unlinked returns can use only the remaining category amount.
+    if (!invoiceId) {
+      return categoryRemaining;
     }
 
-    const categoryPurchases = invoices
-      .filter(item => item.category === category)
-      .reduce((total, item) => total + numberValue(item.total), 0);
+    const invoice = categoryInvoices.find(
+      item => Number(item.id) === Number(invoiceId)
+    );
 
-    const categoryReturns = returns
-      .filter(item => item.category === category)
-      .reduce((total, item) => total + numberValue(item.amount), 0);
+    if (!invoice) {
+      return 0;
+    }
 
+    const previousInvoiceReturns = categoryReturns
+      .filter(item =>
+        Number(item.invoiceId) === Number(invoiceId) ||
+        (
+          !item.invoiceId &&
+          item.invoiceNumber &&
+          item.invoiceNumber === invoice.invoiceNumber
+        )
+      )
+      .reduce(
+        (total, item) => total + numberValue(item.amount),
+        0
+      );
+
+    const invoiceRemaining = roundMoney(
+      Math.max(0, numberValue(invoice.total) - previousInvoiceReturns)
+    );
+
+    // Both limits must be respected.
     return roundMoney(
-      Math.max(0, categoryPurchases - categoryReturns)
+      Math.min(invoiceRemaining, categoryRemaining)
     );
   }
 
-  /* =====================================
-     Save return
-  ===================================== */
+  /* Save return */
 
   async function saveReturn() {
     const button = $("saveReturnBtn");
@@ -688,7 +690,7 @@ const PMApp = (() => {
 
       if (amount > capacity + 0.01) {
         notify(
-          `قيمة المردود أكبر من قيمة المشتريات المتاحة للمردود (${money(capacity)})`
+          `قيمة المردود أكبر من القيمة المتاحة للمردود (${money(capacity)})`
         );
         return;
       }
@@ -749,9 +751,7 @@ const PMApp = (() => {
     }
   }
 
-  /* =====================================
-     Supplier settings
-  ===================================== */
+  /* Supplier settings */
 
   async function loadSettings() {
     const supplierName = await dbGetSetting(
@@ -782,14 +782,12 @@ const PMApp = (() => {
     }
   }
 
-  /* =====================================
-     Backup
-  ===================================== */
+  /* Backup */
 
   async function createBackup() {
     const button = $("backupBtn");
 
-    setButtonLoading(button, true, "إنشاء نسخة احتياطية");
+    setButtonLoading(button, true, "تصدير نسخة احتياطية");
 
     try {
       const backup = await dbExportBackup();
@@ -818,13 +816,11 @@ const PMApp = (() => {
       notify("تعذر إنشاء النسخة الاحتياطية");
 
     } finally {
-      setButtonLoading(button, false, "إنشاء نسخة احتياطية");
+      setButtonLoading(button, false, "تصدير نسخة احتياطية");
     }
   }
 
-  /* =====================================
-     Restore backup
-  ===================================== */
+  /* Restore backup */
 
   async function restoreBackup() {
     const fileInput = $("restoreFile");
@@ -848,11 +844,11 @@ const PMApp = (() => {
 
     if (!confirmed) return;
 
-    setButtonLoading(button, true, "استعادة النسخة");
+    setButtonLoading(button, true, "استعادة البيانات");
 
     try {
-      const text = await file.text();
-      const backup = JSON.parse(text);
+      const fileText = await file.text();
+      const backup = JSON.parse(fileText);
 
       if (!validateBackup(backup)) {
         throw new Error("ملف النسخة الاحتياطية غير صالح");
@@ -878,13 +874,11 @@ const PMApp = (() => {
       notify("تعذرت الاستعادة: " + error.message);
 
     } finally {
-      setButtonLoading(button, false, "استعادة النسخة");
+      setButtonLoading(button, false, "استعادة البيانات");
     }
   }
 
-  /* =====================================
-     Clear all data
-  ===================================== */
+  /* Clear all data */
 
   async function clearAllData() {
     const confirmed = confirm(
@@ -926,9 +920,7 @@ const PMApp = (() => {
     }
   }
 
-  /* =====================================
-     Date defaults
-  ===================================== */
+  /* Date defaults */
 
   function initializeDates() {
     [
@@ -948,9 +940,7 @@ const PMApp = (() => {
     }
   }
 
-  /* =====================================
-     Event bindings
-  ===================================== */
+  /* Event bindings */
 
   function initializeEvents() {
     $("saveReturnBtn")?.addEventListener("click", saveReturn);
@@ -990,9 +980,7 @@ const PMApp = (() => {
     });
   }
 
-  /* =====================================
-     Initialize application
-  ===================================== */
+  /* Initialize application */
 
   async function initialize() {
     if (initialized) return;
