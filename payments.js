@@ -28,6 +28,36 @@
     return `${year}-${month}-${day}`;
   }
 
+  function getDiscountAmount(payment, category) {
+    const recorded = payment.discountAmounts?.[category];
+
+    if (
+      recorded !== undefined &&
+      recorded !== null &&
+      Number.isFinite(Number(recorded))
+    ) {
+      return Math.max(0, Number(recorded));
+    }
+
+    const before = Number(
+      payment.balancesAfterCredit?.[category]
+    );
+
+    const after = Number(
+      payment.netDue?.[category]
+    );
+
+    if (
+      Number.isFinite(before) &&
+      Number.isFinite(after) &&
+      before >= after
+    ) {
+      return round(before - after);
+    }
+
+    return 0;
+  }
+
   async function getBalances() {
     const [invoices, returns, payments] = await Promise.all([
       PharmacyDB.getAll('invoices'),
@@ -46,21 +76,34 @@
         .filter(item => item.category === category)
         .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-      const paid = payments.reduce((sum, payment) => {
+      let paid = 0;
+      let discountsApplied = 0;
+
+      payments.forEach(payment => {
         const allocation = payment.allocations?.[category];
 
         const value = typeof allocation === 'object'
           ? allocation?.amount
           : allocation;
 
-        return sum + Number(value || 0);
-      }, 0);
+        paid += Number(value || 0);
+        discountsApplied += getDiscountAmount(
+          payment,
+          category
+        );
+      });
 
       result[category] = {
         purchases: round(purchases),
         returns: round(returned),
         paid: round(paid),
-        balance: round(purchases - returned - paid)
+        discountsApplied: round(discountsApplied),
+        balance: round(
+          purchases -
+          returned -
+          paid -
+          discountsApplied
+        )
       };
     }
 
@@ -87,8 +130,7 @@
     };
   }
 
-  // يعوّض الرصيد الدائن لفئة مقابل مديونية الفئة الأخرى.
-
+  // تعويض الرصيد الدائن لفئة مقابل مديونية الفئة الأخرى.
   function offsetCredits(balances) {
     let medicine = round(balances.medicine.balance);
     let general = round(balances.general.balance);
@@ -172,12 +214,58 @@
     };
   }
 
+  // توزيع المبلغ بدقة منزلتين دون تجاوز رصيد أي فئة.
+  function splitPayment(amount, state) {
+    const amountCents = Math.round(round(amount) * 100);
+    const totalCents = Math.round(state.totalDue * 100);
+
+    const medicineDueCents = Math.round(
+      state.medicineNet * 100
+    );
+
+    const generalDueCents = Math.round(
+      state.generalNet * 100
+    );
+
+    if (totalCents <= 0 || amountCents <= 0) {
+      return {
+        medicine: 0,
+        general: 0
+      };
+    }
+
+    let medicineCents = Math.round(
+      amountCents * medicineDueCents / totalCents
+    );
+
+    medicineCents = Math.max(
+      0,
+      Math.min(medicineDueCents, medicineCents)
+    );
+
+    let generalCents = amountCents - medicineCents;
+
+    if (generalCents > generalDueCents) {
+      generalCents = generalDueCents;
+      medicineCents = amountCents - generalCents;
+    }
+
+    if (medicineCents > medicineDueCents) {
+      medicineCents = medicineDueCents;
+      generalCents = amountCents - medicineCents;
+    }
+
+    return {
+      medicine: medicineCents / 100,
+      general: generalCents / 100
+    };
+  }
+
   async function render() {
     const state = await calculateState();
 
     const {
       balances,
-      adjusted,
       discounts,
       medicineNet,
       generalNet,
@@ -203,13 +291,17 @@
       }
     });
 
-    if ($('medicineDiscount') &&
-        document.activeElement !== $('medicineDiscount')) {
+    if (
+      $('medicineDiscount') &&
+      document.activeElement !== $('medicineDiscount')
+    ) {
       $('medicineDiscount').value = String(discounts.medicine);
     }
 
-    if ($('generalDiscount') &&
-        document.activeElement !== $('generalDiscount')) {
+    if (
+      $('generalDiscount') &&
+      document.activeElement !== $('generalDiscount')
+    ) {
       $('generalDiscount').value = String(discounts.general);
     }
 
@@ -225,13 +317,10 @@
         )
       );
 
-      if (credit > 0) {
-        message.textContent =
-          'لا يوجد مبلغ مستحق حالياً. الرصيد الدائن المتبقي: ' +
-          money(credit) + ' د.ع.';
-      } else {
-        message.textContent = 'لا يوجد مبلغ مستحق للتسديد حالياً.';
-      }
+      message.textContent = credit > 0
+        ? 'لا يوجد مبلغ مستحق حالياً. الرصيد الدائن المتبقي: ' +
+          money(credit) + ' د.ع.'
+        : 'لا يوجد مبلغ مستحق للتسديد حالياً.';
     }
 
     return state;
@@ -241,16 +330,24 @@
     const message = $('paymentPreviewMessage');
     if (!message) return;
 
-    const amount = Number($('paymentAmount')?.value);
+    const input = $('paymentAmount')?.value;
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (input === '' || input == null) {
       message.textContent =
         'المستحق بعد تعويض الأرصدة الدائنة والخصم: ' +
         money(state.totalDue) + ' د.ع.';
       return;
     }
 
-    if (amount > state.totalDue + 0.001) {
+    const amount = round(Number(input));
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      message.textContent =
+        'أدخل مبلغاً صحيحاً أكبر من صفر.';
+      return;
+    }
+
+    if (amount > state.totalDue) {
       message.textContent =
         'المبلغ المدخل أكبر من المستحق بمقدار ' +
         money(amount - state.totalDue) + ' د.ع.';
@@ -262,13 +359,13 @@
       return;
     }
 
-    const ratio = amount / state.totalDue;
-    const medicineShare = round(state.medicineNet * ratio);
-    const generalShare = round(amount - medicineShare);
+    const allocation = splitPayment(amount, state);
 
     message.textContent =
-      'توزيع التسديد: الأدوية ' + money(medicineShare) +
-      ' د.ع · المواد العامة ' + money(generalShare) + ' د.ع';
+      'توزيع التسديد: الأدوية ' +
+      money(allocation.medicine) +
+      ' د.ع · المواد العامة ' +
+      money(allocation.general) + ' د.ع';
   }
 
   async function saveDiscounts() {
@@ -301,7 +398,10 @@
   }
 
   async function savePayment() {
-    const amount = Number($('paymentAmount')?.value);
+    const amount = round(
+      Number($('paymentAmount')?.value)
+    );
+
     const date = $('paymentDate')?.value;
 
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -319,6 +419,8 @@
     }
 
     const button = $('savePaymentBtn');
+
+    if (button?.disabled) return;
     if (button) button.disabled = true;
 
     try {
@@ -329,7 +431,7 @@
         return;
       }
 
-      if (amount > state.totalDue + 0.001) {
+      if (amount > state.totalDue) {
         toast(
           'مبلغ التسديد أكبر من صافي المستحق (' +
           money(state.totalDue) + ' د.ع).'
@@ -337,15 +439,7 @@
         return;
       }
 
-      const ratio = amount / state.totalDue;
-
-      const medicineAmount = round(
-        state.medicineNet * ratio
-      );
-
-      const generalAmount = round(
-        amount - medicineAmount
-      );
+      const allocation = splitPayment(amount, state);
 
       const discountAmounts = {
         medicine: round(
@@ -359,7 +453,7 @@
       const record = {
         date,
         month: date.slice(0, 7),
-        amount: round(amount),
+        amount,
 
         balancesBefore: {
           medicine: state.balances.medicine.balance,
@@ -397,21 +491,21 @@
         },
 
         allocations: {
-          medicine: medicineAmount,
-          general: generalAmount
+          medicine: allocation.medicine,
+          general: allocation.general
         },
 
         allocationDetails: {
           medicine: {
-            amount: medicineAmount,
+            amount: allocation.medicine,
             remaining: round(
-              state.medicineNet - medicineAmount
+              Math.max(0, state.medicineNet - allocation.medicine)
             )
           },
           general: {
-            amount: generalAmount,
+            amount: allocation.general,
             remaining: round(
-              state.generalNet - generalAmount
+              Math.max(0, state.generalNet - allocation.general)
             )
           }
         },
