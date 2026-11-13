@@ -23,12 +23,25 @@
     element.classList.add('show');
 
     clearTimeout(toastTimer);
+
     toastTimer = setTimeout(() => {
       element.classList.remove('show');
     }, 3000);
   }
 
   window.PharmacyApp = Object.freeze({ toast });
+
+  function localDate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function localMonth() {
+    return localDate().slice(0, 7);
+  }
 
   function showPage(page) {
     const panels = document.querySelectorAll('[data-page-panel]');
@@ -49,15 +62,33 @@
     buttons.forEach(button => {
       const active = button.dataset.page === page;
       button.classList.toggle('active', active);
-      button.setAttribute('aria-current', active ? 'page' : 'false');
+      button.setAttribute(
+        'aria-current',
+        active ? 'page' : 'false'
+      );
     });
 
-    if (page === 'dashboard') refreshDashboard();
-    if (page === 'archive') renderArchive();
-    if (page === 'payment') window.PharmacyPayments?.render();
-    if (page === 'reports') window.PharmacyReports?.load();
+    if (page === 'dashboard') {
+      refreshDashboard();
+    }
 
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (page === 'archive') {
+      renderArchive();
+    }
+
+    if (page === 'payment') {
+      window.PharmacyPayments?.render();
+    }
+
+    if (page === 'reports') {
+      window.PharmacyReports?.load();
+    }
+
+    // auto مدعوم في Safari والمتصفحات الحديثة.
+    window.scrollTo({
+      top: 0,
+      behavior: 'auto'
+    });
   }
 
   function initNavigation() {
@@ -73,7 +104,13 @@
 
   function initTheme() {
     const root = document.documentElement;
-    const saved = localStorage.getItem('pharmacy-invoices-theme');
+
+    let saved = 'light';
+
+    try {
+      saved = localStorage.getItem('pharmacy-invoices-theme') || 'light';
+    } catch (_) {}
+
     const initial = saved === 'dark' ? 'dark' : 'light';
 
     function apply(theme) {
@@ -82,28 +119,39 @@
       const icon = $('themeIcon');
       const button = $('themeToggle');
 
-      if (icon) icon.textContent = theme === 'dark' ? '☀' : '☾';
+      if (icon) {
+        icon.textContent = theme === 'dark' ? '☀' : '☾';
+      }
+
       if (button) {
         button.setAttribute(
           'aria-label',
-          theme === 'dark' ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'
+          theme === 'dark'
+            ? 'تفعيل الوضع الفاتح'
+            : 'تفعيل الوضع الداكن'
         );
       }
 
-      localStorage.setItem('pharmacy-invoices-theme', theme);
+      try {
+        localStorage.setItem('pharmacy-invoices-theme', theme);
+      } catch (_) {}
     }
 
     apply(initial);
 
     $('themeToggle')?.addEventListener('click', () => {
-      apply(root.dataset.theme === 'dark' ? 'light' : 'dark');
+      apply(
+        root.dataset.theme === 'dark' ? 'light' : 'dark'
+      );
     });
   }
 
   function validDate(value) {
-    return typeof value === 'string' &&
+    return (
+      typeof value === 'string' &&
       /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-      !Number.isNaN(Date.parse(value + 'T00:00:00'));
+      !Number.isNaN(Date.parse(value + 'T00:00:00'))
+    );
   }
 
   async function refreshDashboard() {
@@ -114,19 +162,28 @@
         PharmacyDB.getAll('payments')
       ]);
 
-      const month = new Date().toISOString().slice(0, 7);
+      const month = localMonth();
 
       const purchases = invoices
         .filter(item => item.date?.startsWith(month))
-        .reduce((sum, item) => sum + Number(item.total || 0), 0);
+        .reduce(
+          (sum, item) => sum + Number(item.total || 0),
+          0
+        );
 
       const returned = returns
         .filter(item => item.date?.startsWith(month))
-        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        .reduce(
+          (sum, item) => sum + Number(item.amount || 0),
+          0
+        );
 
       const paid = payments
         .filter(item => item.date?.startsWith(month))
-        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        .reduce(
+          (sum, item) => sum + Number(item.amount || 0),
+          0
+        );
 
       const balances = window.PharmacyPayments
         ? await window.PharmacyPayments.getBalances()
@@ -136,8 +193,11 @@
         ? balances.medicine.balance + balances.general.balance
         : 0;
 
-      const medicineBalance = balances?.medicine.balance || 0;
-      const generalBalance = balances?.general.balance || 0;
+      const medicineBalance =
+        balances?.medicine.balance || 0;
+
+      const generalBalance =
+        balances?.general.balance || 0;
 
       const supplier = await PharmacyDB.getSetting(
         'supplier-name',
@@ -145,16 +205,23 @@
       );
 
       const supplierElement = $('supplierBalance');
+
       if (supplierElement) {
-        supplierElement.textContent = money(totalBalance) + ' د.ع';
+        supplierElement.textContent =
+          money(totalBalance) + ' د.ع';
       }
 
       const supplierName = $('supplierName');
-      if (supplierName && document.activeElement !== supplierName) {
+
+      if (
+        supplierName &&
+        document.activeElement !== supplierName
+      ) {
         supplierName.value = supplier || '';
       }
 
       const today = $('todayDate');
+
       if (today) {
         today.textContent = new Intl.DateTimeFormat('ar-IQ', {
           weekday: 'long',
@@ -174,7 +241,10 @@
 
       Object.entries(values).forEach(([id, value]) => {
         const element = $(id);
-        if (element) element.textContent = money(value) + ' د.ع';
+
+        if (element) {
+          element.textContent = money(value) + ' د.ع';
+        }
       });
     } catch (error) {
       toast(error.message || 'تعذر تحديث لوحة التحكم.');
@@ -231,7 +301,10 @@
           type: 'فاتورة',
           date: item.date,
           number: item.number,
-          category: item.category === 'medicine' ? 'الأدوية' : 'المواد العامة',
+          category:
+            item.category === 'medicine'
+              ? 'الأدوية'
+              : 'المواد العامة',
           amount: item.total,
           notes: item.notes,
           searchable: [
@@ -249,7 +322,10 @@
           type: 'مردود',
           date: item.date,
           number: item.number,
-          category: item.category === 'medicine' ? 'الأدوية' : 'المواد العامة',
+          category:
+            item.category === 'medicine'
+              ? 'الأدوية'
+              : 'المواد العامة',
           amount: item.amount,
           notes: item.notes,
           searchable: [
@@ -284,7 +360,9 @@
           item.searchable.toLocaleLowerCase().includes(query)
         )
         .sort((a, b) =>
-          String(b.date || '').localeCompare(String(a.date || ''))
+          String(b.date || '').localeCompare(
+            String(a.date || '')
+          )
         );
 
       list.replaceChildren();
@@ -295,6 +373,7 @@
         empty.textContent = query
           ? 'لا توجد نتائج مطابقة للبحث.'
           : 'لا توجد عمليات مسجلة.';
+
         list.append(empty);
         return;
       }
@@ -310,7 +389,12 @@
           item.notes || ''
         ].filter(Boolean).join(' · ');
 
-        appendArchiveCard(list, title, details, item.amount);
+        appendArchiveCard(
+          list,
+          title,
+          details,
+          item.amount
+        );
       });
     } catch (error) {
       toast(error.message || 'تعذر تحميل الأرشيف.');
@@ -355,7 +439,7 @@
 
       downloadFile(
         JSON.stringify(backup, null, 2),
-        'pharmacy-backup-' + new Date().toISOString().slice(0, 10) + '.json',
+        'pharmacy-backup-' + localDate() + '.json',
         'application/json;charset=utf-8'
       );
 
@@ -393,6 +477,7 @@
       $('restoreFile').value = '';
 
       toast('تمت استعادة النسخة الاحتياطية.');
+
       document.dispatchEvent(
         new CustomEvent('pharmacy:data-changed', {
           detail: { type: 'restore' }
@@ -414,7 +499,9 @@
       return;
     }
 
-    if (!confirm('تأكيد أخير: لا يمكن التراجع عن حذف البيانات.')) {
+    if (!confirm(
+      'تأكيد أخير: لا يمكن التراجع عن حذف البيانات.'
+    )) {
       return;
     }
 
@@ -441,28 +528,58 @@
     initTheme();
     initNavigation();
 
-    $('saveSettingsBtn')?.addEventListener('click', saveSettings);
-    $('backupBtn')?.addEventListener('click', exportBackup);
-    $('restoreBtn')?.addEventListener('click', restoreBackup);
-    $('clearDataBtn')?.addEventListener('click', clearData);
+    $('saveSettingsBtn')?.addEventListener(
+      'click',
+      saveSettings
+    );
 
-    $('archiveSearch')?.addEventListener('input', renderArchive);
+    $('backupBtn')?.addEventListener(
+      'click',
+      exportBackup
+    );
 
-    document.addEventListener('pharmacy:data-changed', () => {
-      refreshDashboard();
+    $('restoreBtn')?.addEventListener(
+      'click',
+      restoreBackup
+    );
 
-      if (!$('page-archive')?.hidden) renderArchive();
-    });
+    $('clearDataBtn')?.addEventListener(
+      'click',
+      clearData
+    );
 
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) refreshDashboard();
-    });
+    $('archiveSearch')?.addEventListener(
+      'input',
+      renderArchive
+    );
+
+    document.addEventListener(
+      'pharmacy:data-changed',
+      () => {
+        refreshDashboard();
+
+        if (!$('page-archive')?.hidden) {
+          renderArchive();
+        }
+      }
+    );
+
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (!document.hidden) {
+          refreshDashboard();
+        }
+      }
+    );
 
     refreshDashboard();
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
+    document.addEventListener('DOMContentLoaded', init, {
+      once: true
+    });
   } else {
     init();
   }
