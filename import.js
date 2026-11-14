@@ -700,9 +700,8 @@
     const duplicateCheck = $('importConfirmDuplicate');
 
     duplicateRow.hidden = !duplicateFound &&
-      draft.duplicate.duplicate_status.toUpperCase() === 'NONE' &&
+      String(draft.duplicate.duplicate_status || 'NONE').toUpperCase() === 'NONE' &&
       draft.duplicate.requires_manual_confirmation !== 'YES';
-
     if (duplicateRow.hidden) {
       duplicateCheck.checked = false;
     }
