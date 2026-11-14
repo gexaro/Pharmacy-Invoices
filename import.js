@@ -1,23 +1,31 @@
-
 (function () {
   'use strict';
 
   const $ = id => document.getElementById(id);
+
+  const CATEGORIES = ['medicine', 'general'];
+
+  const round = value =>
+    Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
   const money = value =>
     new Intl.NumberFormat('en-US', {
       maximumFractionDigits: 2
     }).format(Number(value) || 0);
 
-  const round = value =>
-    Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-
   let draft = null;
   let items = [];
-  let validationErrors = [];
-  let validationWarnings = [];
+
+  let blockingErrors = [];
+  let confirmableMismatch = null;
+  let duplicateNeedsConfirmation = false;
+  let warnings = [];
+
   let duplicateFound = false;
   let saving = false;
+
+  let mismatchApprovedKey = null;
+  let duplicateApprovedKey = null;
 
   function toast(message) {
     if (window.PharmacyApp?.toast) {
@@ -25,6 +33,76 @@
     } else {
       alert(message);
     }
+  }
+
+  function isBlank(value) {
+    return value === undefined ||
+      value === null ||
+      String(value).trim() === '';
+  }
+
+  // يعيد null إذا كانت القيمة فارغة أو غير رقمية، ولا يحولها إلى صفر أبداً.
+  function numberValue(value) {
+    if (isBlank(value)) return null;
+
+    const normalized = String(value)
+      .replace(/[,٬\s]/g, '')
+      .trim();
+
+    if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+      return null;
+    }
+
+    const number = Number(normalized);
+
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function isPositiveInteger(value) {
+    return value !== null &&
+      Number.isSafeInteger(value) &&
+      value > 0;
+  }
+
+  function isNonNegativeInteger(value) {
+    return value !== null &&
+      Number.isSafeInteger(value) &&
+      value >= 0;
+  }
+
+  function isMeaningful(text) {
+    const value = String(text || '').trim();
+
+    return value !== '' &&
+      !/^(none|null|-|لا يوجد|لا توجد)$/i.test(value);
+  }
+
+  function dateValue(value) {
+    const match = String(value || '').trim().match(
+      /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/
+    );
+
+    if (!match) return '';
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+
+    const date = new Date(year, month - 1, day);
+
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return '';
+    }
+
+    return [
+      String(year).padStart(4, '0'),
+      String(month).padStart(2, '0'),
+      String(day).padStart(2, '0')
+    ].join('-');
   }
 
   function parseFields(section) {
@@ -57,53 +135,6 @@
     );
   }
 
-  function numberValue(value) {
-    if (value === undefined || value === null || value === '') {
-      return null;
-    }
-
-    const normalized = String(value)
-      .replace(/,/g, '')
-      .replace(/[٬]/g, '')
-      .trim();
-
-    if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
-      return null;
-    }
-
-    const number = Number(normalized);
-
-    return Number.isFinite(number) ? number : null;
-  }
-
-  function dateValue(value) {
-    const match = String(value || '').trim().match(
-      /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/
-    );
-
-    if (!match) return '';
-
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-
-    const date = new Date(year, month - 1, day);
-
-    if (
-      date.getFullYear() !== year ||
-      date.getMonth() !== month - 1 ||
-      date.getDate() !== day
-    ) {
-      return '';
-    }
-
-    return [
-      String(year).padStart(4, '0'),
-      String(month).padStart(2, '0'),
-      String(day).padStart(2, '0')
-    ].join('-');
-  }
-
   function parseItemBlocks(text) {
     const blocks = [];
     const regex = /^\s*ITEM\s*$/gm;
@@ -119,9 +150,7 @@
         );
       }
 
-      blocks.push(
-        parseFields(text.slice(start, end))
-      );
+      blocks.push(parseFields(text.slice(start, end)));
 
       regex.lastIndex = end + 'END_ITEM'.length;
     }
@@ -130,96 +159,14 @@
   }
 
   function prepareItem(data, index) {
-    const name = String(data.item_name || '').trim();
-
-    const paidQty = numberValue(data.paid_quantity);
-    const bonusQty = numberValue(data.bonus_quantity);
-    const receivedQty = numberValue(data.total_received_quantity);
-    const unitPrice = numberValue(data.unit_price);
-    const itemTotal = numberValue(data.line_total);
-    const actualUnitCost = numberValue(data.actual_unit_cost);
-
-    const errors = [];
-
-    if (!name) {
-      errors.push('اسم الصنف غير موجود.');
-    }
-
-    if (
-      paidQty === null ||
-      !Number.isSafeInteger(paidQty) ||
-      paidQty <= 0
-    ) {
-      errors.push('الكمية المدفوعة غير صحيحة.');
-    }
-
-    if (
-      bonusQty === null ||
-      !Number.isSafeInteger(bonusQty) ||
-      bonusQty < 0
-    ) {
-      errors.push('كمية البونص غير صحيحة.');
-    }
-
-    if (
-      receivedQty === null ||
-      !Number.isSafeInteger(receivedQty) ||
-      receivedQty < 0
-    ) {
-      errors.push('الكمية المستلمة غير صحيحة.');
-    }
-
-    if (
-      paidQty !== null &&
-      bonusQty !== null &&
-      receivedQty !== null &&
-      paidQty + bonusQty !== receivedQty
-    ) {
-      errors.push('الكمية المستلمة لا تساوي المدفوع + البونص.');
-    }
-
-    if (
-      unitPrice === null ||
-      unitPrice < 0
-    ) {
-      errors.push('سعر الوحدة غير صحيح.');
-    }
-
-    if (
-      itemTotal === null ||
-      itemTotal < 0
-    ) {
-      errors.push('قيمة السطر غير موجودة أو غير صحيحة.');
-    }
-
-    if (
-      actualUnitCost !== null &&
-      actualUnitCost < 0
-    ) {
-      errors.push('التكلفة الفعلية غير صحيحة.');
-    }
-
-    const calculatedTotal =
-      paidQty !== null && unitPrice !== null
-        ? round(paidQty * unitPrice)
-        : null;
-
-    if (
-      calculatedTotal !== null &&
-      itemTotal !== null &&
-      Math.abs(calculatedTotal - itemTotal) > 0.02
-    ) {
-      errors.push('قيمة السطر لا تطابق الكمية المدفوعة × السعر.');
-    }
-
     return {
-      name,
-      paidQty,
-      bonusQty,
-      receivedQty,
-      unitPrice,
-      itemTotal,
-      effectiveUnitCost: actualUnitCost,
+      name: String(data.item_name || '').trim(),
+      paidQty: numberValue(data.paid_quantity),
+      bonusQty: numberValue(data.bonus_quantity),
+      receivedQty: numberValue(data.total_received_quantity),
+      unitPrice: numberValue(data.unit_price),
+      itemTotal: numberValue(data.line_total),
+      effectiveUnitCost: numberValue(data.actual_unit_cost),
       manufacturer: data.manufacturer || '',
       strength: data.strength || '',
       dosageForm: data.dosage_form || '',
@@ -232,14 +179,16 @@
       confidence: data.confidence || '',
       notes: data.notes || '',
       sourceCategory: data.category || '',
-      errors,
-      sourceIndex: index
+      sourceIndex: index,
+      errors: []
     };
   }
 
   function readInvoice(text) {
     if (!text.includes('PHARMACY_INVOICE_DATA_V1')) {
-      throw new Error('صيغة النص غير صحيحة. لم يتم العثور على PHARMACY_INVOICE_DATA_V1.');
+      throw new Error(
+        'صيغة النص غير صحيحة. لم يتم العثور على PHARMACY_INVOICE_DATA_V1.'
+      );
     }
 
     const header = parseFields(
@@ -268,10 +217,8 @@
       throw new Error('لم يتم العثور على أصناف داخل الفاتورة.');
     }
 
-    const preparedItems = itemBlocks.map(prepareItem);
-
     const firstCategory = itemBlocks.find(
-      item => ['medicine', 'general'].includes(item.category)
+      item => CATEGORIES.includes(item.category)
     )?.category || 'medicine';
 
     return {
@@ -279,7 +226,7 @@
       summary,
       duplicate,
       uncertain,
-      items: preparedItems,
+      items: itemBlocks.map(prepareItem),
       category: firstCategory,
       sourceText: text
     };
@@ -330,222 +277,25 @@
     setValue('importRepresentativePhone', h.representative_phone);
     setValue('importInvoiceType', h.invoice_type);
     setValue('importPrintedTotal', h.printed_total);
-
     setValue('importInvoiceCategory', draft.category);
   }
 
-  function addValidation(message, type = 'error') {
-    if (type === 'error') {
-      validationErrors.push(message);
-    } else {
-      validationWarnings.push(message);
-    }
-  }
-
-  function validateDraft() {
-    validationErrors = [];
-    validationWarnings = [];
-
+  function showHeaderWarnings() {
+    const element = $('importHeaderWarnings');
     const h = draft.header;
 
-    if (!String($('importSupplier')?.value || '').trim()) {
-      addValidation('اسم المورد غير موجود.');
+    const messages = [];
+
+    if (isBlank(h.box_count)) {
+      messages.push('عدد الصناديق غير متوفر.');
     }
 
-    if (!String($('importInvoiceNumber')?.value || '').trim()) {
-      addValidation('رقم الفاتورة غير موجود.');
+    if (isBlank(h.previous_balance)) {
+      messages.push('الرصيد السابق غير متوفر.');
     }
 
-    if (!dateValue($('importInvoiceDate')?.value)) {
-      addValidation('تاريخ الفاتورة غير صحيح.');
-    }
-
-    const category = $('importInvoiceCategory')?.value;
-
-    if (!['medicine', 'general'].includes(category)) {
-      addValidation('اختر فئة الفاتورة.');
-    }
-
-    if (!items.length) {
-      addValidation('لا توجد أصناف.');
-    }
-
-    items.forEach((item, index) => {
-      item.errors = [];
-
-      if (!item.name.trim()) {
-        item.errors.push('اسم الصنف مطلوب.');
-      }
-
-      if (
-        !Number.isSafeInteger(Number(item.paidQty)) ||
-        Number(item.paidQty) <= 0
-      ) {
-        item.errors.push('الكمية المدفوعة غير صحيحة.');
-      }
-
-      if (
-        !Number.isSafeInteger(Number(item.bonusQty)) ||
-        Number(item.bonusQty) < 0
-      ) {
-        item.errors.push('كمية البونص غير صحيحة.');
-      }
-
-      if (
-        Number(item.receivedQty) !==
-        Number(item.paidQty) + Number(item.bonusQty)
-      ) {
-        item.errors.push('الكمية المستلمة غير متطابقة.');
-      }
-
-      if (
-        !Number.isFinite(Number(item.unitPrice)) ||
-        Number(item.unitPrice) < 0
-      ) {
-        item.errors.push('سعر الوحدة غير صحيح.');
-      }
-
-      if (
-        !Number.isFinite(Number(item.itemTotal)) ||
-        Number(item.itemTotal) < 0
-      ) {
-        item.errors.push('قيمة السطر غير صحيحة.');
-      }
-
-      const calculated = round(
-        Number(item.paidQty) * Number(item.unitPrice)
-      );
-
-      if (
-        Number.isFinite(calculated) &&
-        Math.abs(calculated - Number(item.itemTotal)) > 0.02
-      ) {
-        item.errors.push('قيمة السطر لا تطابق الحساب.');
-      }
-
-      if (item.errors.length) {
-        addValidation(
-          'الصنف ' + (index + 1) + ' (' + item.name + '): ' +
-          item.errors.join(' ')
-        );
-      }
-
-      if (
-        item.sourceCategory &&
-        item.sourceCategory !== $('importInvoiceCategory')?.value
-      ) {
-        addValidation(
-          'تصنيف الصنف ' + item.name +
-          ' لا يطابق فئة الفاتورة المختارة.'
-        );
-      }
-
-      if (
-        item.confidence &&
-        item.confidence.toUpperCase() !== 'HIGH'
-      ) {
-        addValidation(
-          'ثقة استخراج الصنف ' + item.name +
-          ' ليست HIGH. راجعه يدوياً.',
-          'warning'
-        );
-      }
-    });
-
-    const pages = numberValue(h.page_count);
-
-    if (pages !== null && pages > 1) {
-      const foundPages = new Set(
-        items
-          .map(item => item.pageNumber)
-          .filter(value => Number.isInteger(value) && value > 0)
-      );
-
-      if (foundPages.size < pages) {
-        addValidation(
-          'الفاتورة تشير إلى ' + pages +
-          ' صفحات، لكن النص لا يحتوي على أصناف من جميع الصفحات.'
-        );
-      }
-    }
-
-    const printed = numberValue($('importPrintedTotal')?.value);
-
-    if (printed === null) {
-      addValidation(
-        'الإجمالي المطبوع غير متوفر. لا يمكن إتمام الحفظ دون مراجعته.'
-      );
-    }
-
-    if (
-      printed !== null &&
-      Math.abs(printed - calculateTotal()) > 0.02
-    ) {
-      addValidation(
-        'الإجمالي المحسوب لا يطابق الإجمالي المطبوع. راجع الفرق وأكد ذلك.'
-      );
-    }
-
-    const summaryCount = numberValue(draft.summary.items_count);
-
-    if (
-      summaryCount !== null &&
-      summaryCount !== items.length
-    ) {
-      addValidation(
-        'عدد الأصناف لا يطابق العدد المذكور في الملخص.'
-      );
-    }
-
-    const summaryTotal = numberValue(
-      draft.summary.sum_of_line_totals
-    );
-
-    if (
-      summaryTotal !== null &&
-      Math.abs(summaryTotal - calculateTotal()) > 0.02
-    ) {
-      addValidation(
-        'مجموع قيم الأصناف لا يطابق مجموع الأصناف المذكور في الملخص.'
-      );
-    }
-
-    if (
-      draft.duplicate.duplicate_status &&
-      draft.duplicate.duplicate_status.toUpperCase() !== 'NONE'
-    ) {
-      addValidation(
-        'بيانات النص تشير إلى احتمال وجود نسخة مكررة.',
-        'warning'
-      );
-    }
-
-    if (
-      draft.duplicate.requires_manual_confirmation === 'YES'
-    ) {
-      addValidation(
-        'النص يتطلب تأكيداً يدوياً بشأن التكرار.',
-        'warning'
-      );
-    }
-
-    if (draft.uncertain.trim()) {
-      addValidation(
-        'توجد بيانات غير مؤكدة في النص الأصلي. راجعها قبل الحفظ.',
-        'warning'
-      );
-    }
-
-    if (duplicateFound) {
-      addValidation(
-        'وجدت فاتورة سابقة برقم مشابه. يلزم تأكيد أنها فاتورة مستقلة.',
-        'warning'
-      );
-    }
-
-    if (validationErrors.length === 0 && validationWarnings.length === 0) {
-      addValidation('اجتازت الفاتورة الفحص الأولي.', 'success');
-    }
+    element.textContent = messages.join(' ');
+    element.hidden = messages.length === 0;
   }
 
   function calculateTotal() {
@@ -555,6 +305,427 @@
         0
       )
     );
+  }
+
+  // إعادة حساب القيم المشتقة عند تعديل الكمية أو السعر.
+  function recalculateItem(item) {
+    if (item.paidQty !== null && item.unitPrice !== null) {
+      item.itemTotal = round(item.paidQty * item.unitPrice);
+    }
+
+    if (item.paidQty !== null && item.bonusQty !== null) {
+      item.receivedQty = item.paidQty + item.bonusQty;
+    }
+
+    if (item.receivedQty > 0 && item.itemTotal !== null) {
+      item.effectiveUnitCost = round(
+        item.itemTotal / item.receivedQty
+      );
+    }
+  }
+
+  function validateItem(item) {
+    const errors = [];
+
+    if (!item.name.trim()) {
+      errors.push('اسم الصنف مطلوب.');
+    }
+
+    if (!isPositiveInteger(item.paidQty)) {
+      errors.push('الكمية المدفوعة غير صحيحة.');
+    }
+
+    if (!isNonNegativeInteger(item.bonusQty)) {
+      errors.push('كمية البونص غير صحيحة.');
+    }
+
+    if (!isNonNegativeInteger(item.receivedQty)) {
+      errors.push('الكمية المستلمة غير صحيحة.');
+    }
+
+    if (
+      item.paidQty !== null &&
+      item.bonusQty !== null &&
+      item.receivedQty !== null &&
+      item.receivedQty !== item.paidQty + item.bonusQty
+    ) {
+      errors.push('الكمية المستلمة لا تساوي المدفوع + البونص.');
+    }
+
+    if (item.unitPrice === null || item.unitPrice < 0) {
+      errors.push('سعر الوحدة غير صحيح.');
+    }
+
+    if (item.itemTotal === null || item.itemTotal < 0) {
+      errors.push('قيمة السطر غير موجودة أو غير صحيحة.');
+    }
+
+    if (
+      item.paidQty !== null &&
+      item.unitPrice !== null &&
+      item.itemTotal !== null &&
+      Math.abs(round(item.paidQty * item.unitPrice) - item.itemTotal) > 0.02
+    ) {
+      errors.push('قيمة السطر لا تطابق الكمية المدفوعة × السعر.');
+    }
+
+    return errors;
+  }
+
+  function currentMismatchKey() {
+    const printed = numberValue($('importPrintedTotal')?.value);
+    return calculateTotal() + '|' + printed;
+  }
+
+  function currentDuplicateKey() {
+    return [
+      String($('importInvoiceNumber')?.value || '').trim(),
+      String($('importSupplier')?.value || '').trim(),
+      $('importInvoiceDate')?.value || '',
+      calculateTotal()
+    ].join('|');
+  }
+
+  function validateDraft() {
+    blockingErrors = [];
+    confirmableMismatch = null;
+    duplicateNeedsConfirmation = false;
+    warnings = [];
+
+    if (isBlank($('importSupplier')?.value)) {
+      blockingErrors.push('اسم المورد غير موجود.');
+    }
+
+    if (isBlank($('importInvoiceNumber')?.value)) {
+      blockingErrors.push('رقم الفاتورة غير موجود.');
+    }
+
+    if (!dateValue($('importInvoiceDate')?.value)) {
+      blockingErrors.push('تاريخ الفاتورة غير صحيح.');
+    }
+
+    const selectedCategory = $('importInvoiceCategory')?.value;
+
+    if (!CATEGORIES.includes(selectedCategory)) {
+      blockingErrors.push('اختر فئة الفاتورة.');
+    }
+
+    if (!items.length) {
+      blockingErrors.push('لا توجد أصناف في هذه الفاتورة.');
+    }
+
+    items.forEach((item, index) => {
+      item.errors = validateItem(item);
+
+      if (item.errors.length) {
+        blockingErrors.push(
+          'الصنف ' + (index + 1) + ' (' + (item.name || 'بدون اسم') + '): ' +
+          item.errors.join(' ')
+        );
+      }
+
+      if (
+        item.sourceCategory &&
+        item.sourceCategory !== selectedCategory
+      ) {
+        blockingErrors.push(
+          'تصنيف الصنف ' + (item.name || index + 1) +
+          ' لا يطابق فئة الفاتورة المختارة.'
+        );
+      }
+
+      if (
+        item.confidence &&
+        item.confidence.toUpperCase() !== 'HIGH'
+      ) {
+        warnings.push(
+          'ثقة استخراج الصنف ' + (item.name || index + 1) +
+          ' ليست HIGH. راجعه يدوياً.'
+        );
+      }
+    });
+
+    const pageCount = numberValue(draft.header.page_count);
+
+    if (pageCount !== null && pageCount > 1) {
+      const foundPages = new Set(
+        items
+          .map(item => item.pageNumber)
+          .filter(value => Number.isInteger(value) && value > 0)
+      );
+
+      if (foundPages.size < pageCount) {
+        blockingErrors.push(
+          'الفاتورة تشير إلى ' + pageCount + ' صفحات، لكن النص لا يحتوي أصنافاً من جميع الصفحات. أضف نص الصفحات الناقصة قبل الحفظ.'
+        );
+      }
+    }
+
+    const printed = numberValue($('importPrintedTotal')?.value);
+    const calculated = calculateTotal();
+
+    if (printed === null) {
+      blockingErrors.push(
+        'الإجمالي المطبوع غير موجود في النص. إذا كانت الفاتورة من أكثر من صفحة، تأكد من لصق نص الصفحة الأخيرة التي تحتوي الإجمالي.'
+      );
+    } else if (Math.abs(printed - calculated) > 0.02) {
+      confirmableMismatch =
+        'الإجمالي المحسوب (' + money(calculated) +
+        ') لا يطابق الإجمالي المطبوع (' + money(printed) +
+        '). راجع الفرق وأكد ذلك.';
+    }
+
+    const summaryCount = numberValue(draft.summary.items_count);
+
+    if (summaryCount !== null && summaryCount !== items.length) {
+      blockingErrors.push(
+        'عدد الأصناف لا يطابق العدد المذكور في الملخص.'
+      );
+    }
+
+    const summaryTotal = numberValue(draft.summary.sum_of_line_totals);
+
+    if (
+      summaryTotal !== null &&
+      Math.abs(summaryTotal - calculated) > 0.02
+    ) {
+      blockingErrors.push(
+        'مجموع قيم الأصناف لا يطابق مجموع الأصناف المذكور في الملخص.'
+      );
+    }
+
+    const duplicateStatus = String(
+      draft.duplicate.duplicate_status || 'NONE'
+    ).toUpperCase();
+
+    if (duplicateFound) {
+      duplicateNeedsConfirmation = true;
+      warnings.push(
+        'وجدت فاتورة سابقة برقم ومورد وتاريخ مشابه. يلزم تأكيد أنها فاتورة مستقلة.'
+      );
+    }
+
+    if (duplicateStatus !== 'NONE') {
+      duplicateNeedsConfirmation = true;
+      warnings.push(
+        'بيانات النص تشير إلى احتمال وجود نسخة مكررة.'
+      );
+    }
+
+    if (draft.duplicate.requires_manual_confirmation === 'YES') {
+      duplicateNeedsConfirmation = true;
+      warnings.push('النص يتطلب تأكيداً يدوياً بشأن التكرار.');
+    }
+
+    if (isMeaningful(draft.uncertain)) {
+      warnings.push(
+        'توجد بيانات غير مؤكدة في النص الأصلي. راجعها قبل الحفظ.'
+      );
+    }
+  }
+
+  function renderMessages() {
+    const container = $('importValidationMessages');
+
+    if (!container) return;
+
+    container.replaceChildren();
+
+    const all = [
+      ...blockingErrors.map(text => ({
+        text,
+        className: 'error-message'
+      })),
+      ...(confirmableMismatch
+        ? [{ text: confirmableMismatch, className: 'info-strip' }]
+        : []),
+      ...warnings.map(text => ({
+        text,
+        className: 'info-strip'
+      }))
+    ];
+
+    if (!all.length) {
+      all.push({
+        text: 'اجتازت الفاتورة الفحص الأولي.',
+        className: 'info-strip'
+      });
+    }
+
+    all.forEach(entry => {
+      const row = document.createElement('p');
+      row.className = 'message-box ' + entry.className;
+      row.textContent = entry.text;
+      container.append(row);
+    });
+  }
+
+  function updateReview() {
+    validateDraft();
+
+    const calculated = calculateTotal();
+    const printed = numberValue($('importPrintedTotal')?.value);
+
+    const paid = items.reduce(
+      (sum, item) => sum + Number(item.paidQty || 0), 0
+    );
+    const bonus = items.reduce(
+      (sum, item) => sum + Number(item.bonusQty || 0), 0
+    );
+    const received = items.reduce(
+      (sum, item) => sum + Number(item.receivedQty || 0), 0
+    );
+
+    $('importItemCount').textContent = String(items.length);
+    $('importSummaryItems').textContent = String(items.length);
+    $('importSummaryPaid').textContent = String(paid);
+    $('importSummaryBonus').textContent = String(bonus);
+    $('importSummaryReceived').textContent = String(received);
+    $('importSummaryCalculated').textContent = money(calculated) + ' د.ع';
+
+    $('importSummaryPrinted').textContent =
+      printed === null ? 'غير متوفر' : money(printed) + ' د.ع';
+
+    $('importSummaryDifference').textContent =
+      printed === null
+        ? 'غير قابل للتحقق'
+        : money(round(printed - calculated)) + ' د.ع';
+
+    // تأكيد فرق الإجمالي: يُلغى تلقائياً إذا تغيرت الأرقام بعد التأكيد.
+    const mismatchRow = $('importMismatchConfirmRow');
+    const mismatchCheck = $('importConfirmMismatch');
+
+    mismatchRow.hidden = !confirmableMismatch;
+
+    const mismatchKey = confirmableMismatch ? currentMismatchKey() : null;
+
+    if (mismatchApprovedKey !== mismatchKey) {
+      mismatchCheck.checked = false;
+      mismatchApprovedKey = null;
+    }
+
+    const mismatchApproved = !confirmableMismatch || mismatchCheck.checked;
+
+    // تأكيد التكرار: يُلغى تلقائياً إذا تغيرت الفاتورة بعد التأكيد.
+    const duplicateRow = $('importDuplicateConfirmRow');
+    const duplicateCheck = $('importConfirmDuplicate');
+
+    duplicateRow.hidden = !duplicateNeedsConfirmation;
+
+    const duplicateKey = duplicateNeedsConfirmation
+      ? currentDuplicateKey()
+      : null;
+
+    if (duplicateApprovedKey !== duplicateKey) {
+      duplicateCheck.checked = false;
+      duplicateApprovedKey = null;
+    }
+
+    const duplicateApproved =
+      !duplicateNeedsConfirmation || duplicateCheck.checked;
+
+    const canSave =
+      !saving &&
+      items.length > 0 &&
+      blockingErrors.length === 0 &&
+      mismatchApproved &&
+      duplicateApproved;
+
+    $('saveImportedInvoiceBtn').disabled = !canSave;
+
+    const status = $('importInvoiceStatus');
+
+    if (status) {
+      status.textContent = canSave ? 'جاهزة للحفظ' : 'تحتاج مراجعة';
+    }
+  }
+
+  function renderItems() {
+    const container = $('importItemsReview');
+
+    if (!container) return;
+
+    container.replaceChildren();
+
+    items.forEach((item, index) => {
+      const card = document.createElement('article');
+      card.className = 'panel import-item-card';
+
+      const heading = document.createElement('div');
+      heading.className = 'section-heading';
+
+      const title = document.createElement('strong');
+      title.textContent = (index + 1) + '. ' + (item.name || 'بدون اسم');
+
+      const badge = document.createElement('span');
+      badge.className = 'count-badge';
+      badge.textContent = item.bonusQty > 0 ? 'يتضمن بونص' : 'صنف';
+
+      heading.append(title, badge);
+
+      const fields = document.createElement('div');
+      fields.className = 'form-grid';
+
+      fields.append(
+        createItemField('اسم الصنف', item.name, value => {
+          item.name = String(value).trim();
+        }),
+        createItemField('الكمية المدفوعة', item.paidQty ?? '', value => {
+          item.paidQty = numberValue(value);
+          recalculateItem(item);
+        }, 'number'),
+        createItemField('كمية البونص', item.bonusQty ?? '', value => {
+          item.bonusQty = numberValue(value);
+          recalculateItem(item);
+        }, 'number'),
+        createItemField('الكمية المستلمة', item.receivedQty ?? '', value => {
+          item.receivedQty = numberValue(value);
+        }, 'number'),
+        createItemField('سعر الوحدة', item.unitPrice ?? '', value => {
+          item.unitPrice = numberValue(value);
+          recalculateItem(item);
+        }, 'number'),
+        createItemField('قيمة السطر', item.itemTotal ?? '', value => {
+          item.itemTotal = numberValue(value);
+        }, 'number')
+      );
+
+      const details = document.createElement('p');
+      details.className = 'hint-text';
+      details.textContent =
+        'الشركة: ' + (item.manufacturer || 'غير محددة') +
+        ' · التركيز: ' + (item.strength || 'غير محدد') +
+        ' · الشكل: ' + (item.dosageForm || 'غير محدد') +
+        ' · العبوة: ' + (item.packageSize || 'غير محددة');
+
+      const batch = document.createElement('p');
+      batch.className = 'hint-text';
+      batch.textContent =
+        'التشغيلة: ' + (item.batchNumber || 'غير متوفرة') +
+        ' · الصلاحية: ' + (item.expiryDate || 'غير متوفرة') +
+        ' · التكلفة الفعلية للوحدة: ' +
+        (item.effectiveUnitCost === null
+          ? 'غير متوفرة'
+          : money(item.effectiveUnitCost));
+
+      card.append(heading, fields, details, batch);
+
+      if (item.notes) {
+        const note = document.createElement('p');
+        note.className = 'hint-text';
+        note.textContent = item.notes;
+        card.append(note);
+      }
+
+      (item.errors || []).forEach(message => {
+        const error = document.createElement('p');
+        error.className = 'message-box error-message';
+        error.textContent = message;
+        card.append(error);
+      });
+
+      container.append(card);
+    });
   }
 
   function createItemField(labelText, value, onChange, type = 'text') {
@@ -576,7 +747,7 @@
 
     input.addEventListener('change', () => {
       onChange(input.value);
-      updateReview();
+      refresh();
     });
 
     wrapper.append(label, input);
@@ -584,188 +755,9 @@
     return wrapper;
   }
 
-  function renderItems() {
-    const container = $('importItemsReview');
-
-    if (!container) return;
-
-    container.replaceChildren();
-
-    items.forEach((item, index) => {
-      const card = document.createElement('article');
-      card.className = 'panel import-item-card';
-
-      const heading = document.createElement('div');
-      heading.className = 'section-heading';
-
-      const title = document.createElement('strong');
-      title.textContent = (index + 1) + '. ' + item.name;
-
-      const badge = document.createElement('span');
-      badge.className = 'count-badge';
-      badge.textContent = item.bonusQty > 0 ? 'يتضمن بونص' : 'صنف';
-
-      heading.append(title, badge);
-
-      const fields = document.createElement('div');
-      fields.className = 'form-grid';
-
-      fields.append(
-        createItemField('اسم الصنف', item.name, value => {
-          item.name = value;
-        }),
-        createItemField('الكمية المدفوعة', item.paidQty, value => {
-          item.paidQty = numberValue(value);
-        }, 'number'),
-        createItemField('كمية البونص', item.bonusQty, value => {
-          item.bonusQty = numberValue(value);
-        }, 'number'),
-        createItemField('الكمية المستلمة', item.receivedQty, value => {
-          item.receivedQty = numberValue(value);
-        }, 'number'),
-        createItemField('سعر الوحدة', item.unitPrice, value => {
-          item.unitPrice = numberValue(value);
-        }, 'number'),
-        createItemField('قيمة السطر', item.itemTotal, value => {
-          item.itemTotal = numberValue(value);
-        }, 'number')
-      );
-
-      const details = document.createElement('p');
-      details.className = 'hint-text';
-      details.textContent =
-        'الشركة: ' + (item.manufacturer || 'غير محددة') +
-        ' · التركيز: ' + (item.strength || 'غير محدد') +
-        ' · الشكل: ' + (item.dosageForm || 'غير محدد') +
-        ' · العبوة: ' + (item.packageSize || 'غير محددة');
-
-      const batch = document.createElement('p');
-      batch.className = 'hint-text';
-      batch.textContent =
-        'التشغيلة: ' + (item.batchNumber || 'غير متوفرة') +
-        ' · الصلاحية: ' + (item.expiryDate || 'غير متوفرة');
-
-      const note = document.createElement('p');
-      note.className = 'hint-text';
-      note.textContent = item.notes || '';
-
-      card.append(heading, fields, details, batch, note);
-      container.append(card);
-    });
-
-    $('importItemCount').textContent = String(items.length);
-  }
-
-  function renderMessages() {
-    const container = $('importValidationMessages');
-
-    if (!container) return;
-
-    container.replaceChildren();
-
-    const all = [
-      ...validationErrors.map(message => ({
-        message,
-        type: 'error'
-      })),
-      ...validationWarnings.map(message => ({
-        message,
-        type: 'warning'
-      }))
-    ];
-
-    all.forEach(entry => {
-      const row = document.createElement('p');
-      row.className = 'message-box ' +
-        (entry.type === 'error' ? 'error-message' : 'info-strip');
-      row.textContent = entry.message;
-      container.append(row);
-    });
-
-    const mismatch =
-      validationErrors.some(message =>
-        message.includes('الإجمالي المحسوب')
-      );
-
-    const mismatchRow = $('importMismatchConfirmRow');
-    const mismatchCheck = $('importConfirmMismatch');
-
-    mismatchRow.hidden = !mismatch;
-
-    if (!mismatch) {
-      mismatchCheck.checked = false;
-    }
-
-    const duplicateRow = $('importDuplicateConfirmRow');
-    const duplicateCheck = $('importConfirmDuplicate');
-
-    duplicateRow.hidden = !duplicateFound &&
-      String(draft.duplicate.duplicate_status || 'NONE').toUpperCase() === 'NONE' &&
-      draft.duplicate.requires_manual_confirmation !== 'YES';
-    if (duplicateRow.hidden) {
-      duplicateCheck.checked = false;
-    }
-  }
-
-  function updateReview() {
-    validateDraft();
-
-    const total = calculateTotal();
-    const paid = items.reduce(
-      (sum, item) => sum + Number(item.paidQty || 0),
-      0
-    );
-    const bonus = items.reduce(
-      (sum, item) => sum + Number(item.bonusQty || 0),
-      0
-    );
-    const received = items.reduce(
-      (sum, item) => sum + Number(item.receivedQty || 0),
-      0
-    );
-
-    const printed = numberValue($('importPrintedTotal')?.value);
-
-    $('importSummaryItems').textContent = String(items.length);
-    $('importSummaryPaid').textContent = String(paid);
-    $('importSummaryBonus').textContent = String(bonus);
-    $('importSummaryReceived').textContent = String(received);
-    $('importSummaryCalculated').textContent = money(total) + ' د.ع';
-
-    $('importSummaryPrinted').textContent =
-      printed === null ? 'غير متوفر' : money(printed) + ' د.ع';
-
-    $('importSummaryDifference').textContent =
-      printed === null
-        ? 'غير قابل للتحقق'
-        : money(round(printed - total)) + ' د.ع';
-
-    renderMessages();
-
-    const mismatch = validationErrors.some(message =>
-      message.includes('الإجمالي المحسوب')
-    );
-
-    const duplicateNeedsConfirmation =
-      !$('importDuplicateConfirmRow').hidden;
-
-    const mismatchApproved =
-      !mismatch || $('importConfirmMismatch').checked;
-
-    const duplicateApproved =
-      !duplicateNeedsConfirmation ||
-      $('importConfirmDuplicate').checked;
-
-    const onlyConfirmableErrors =
-      validationErrors.every(message =>
-        message.includes('الإجمالي المحسوب')
-      );
-
-    $('saveImportedInvoiceBtn').disabled =
-      saving ||
-      (!onlyConfirmableErrors && validationErrors.length > 0) ||
-      !mismatchApproved ||
-      !duplicateApproved;
+  function refresh() {
+    updateReview();
+    renderItems();
   }
 
   async function checkDuplicates() {
@@ -777,53 +769,34 @@
 
     if (!number || !window.PharmacyDB) return;
 
-    const invoices = await window.PharmacyDB.getAll('invoices');
+    try {
+      const invoices = await window.PharmacyDB.getAll('invoices');
 
-    const supplier = String(
-      $('importSupplier')?.value || ''
-    ).trim().toLocaleLowerCase();
-
-    const date = $('importInvoiceDate')?.value;
-
-    duplicateFound = invoices.some(invoice => {
-      if (String(invoice.number || '').trim() !== number) {
-        return false;
-      }
-
-      const oldSupplier = String(
-        invoice.supplier || ''
+      const supplier = String(
+        $('importSupplier')?.value || ''
       ).trim().toLocaleLowerCase();
 
-      const sameSupplier =
-        !supplier || !oldSupplier || supplier === oldSupplier;
+      const date = $('importInvoiceDate')?.value;
 
-      const sameDate =
-        !date || invoice.date === date;
+      duplicateFound = invoices.some(invoice => {
+        if (String(invoice.number || '').trim() !== number) {
+          return false;
+        }
 
-      return sameSupplier && sameDate;
-    });
-  }
+        const oldSupplier = String(
+          invoice.supplier || ''
+        ).trim().toLocaleLowerCase();
 
-  function showHeaderWarnings() {
-    const element = $('importHeaderWarnings');
-    const h = draft.header;
+        const sameSupplier =
+          !supplier || !oldSupplier || supplier === oldSupplier;
 
-    const warnings = [];
+        const sameDate = !date || invoice.date === date;
 
-    if (!h.box_count) {
-      warnings.push('عدد الصناديق غير متوفر.');
+        return sameSupplier && sameDate;
+      });
+    } catch (error) {
+      toast('تعذر فحص الفواتير المكررة. تحقق يدوياً قبل الحفظ.');
     }
-
-    if (!h.previous_balance) {
-      warnings.push('الرصيد السابق غير متوفر.');
-    }
-
-    if (draft.uncertain.trim()) {
-      warnings.push('توجد ملاحظات وبيانات غير مؤكدة في النص الأصلي.');
-    }
-
-    element.textContent = warnings.join(' ');
-    element.hidden = warnings.length === 0;
   }
 
   async function parseInvoice() {
@@ -841,13 +814,15 @@
       draft = readInvoice(text);
       items = draft.items.map(item => ({ ...item }));
 
+      mismatchApprovedKey = null;
+      duplicateApprovedKey = null;
+
       fillHeader();
       showHeaderWarnings();
-      renderItems();
 
       await checkDuplicates();
 
-      updateReview();
+      refresh();
       showReview();
 
       $('invoiceImportReview').scrollIntoView({
@@ -876,6 +851,8 @@
     draft = null;
     items = [];
     duplicateFound = false;
+    mismatchApprovedKey = null;
+    duplicateApprovedKey = null;
 
     $('importConfirmMismatch').checked = false;
     $('importConfirmDuplicate').checked = false;
@@ -889,6 +866,8 @@
     draft = null;
     items = [];
     duplicateFound = false;
+    mismatchApprovedKey = null;
+    duplicateApprovedKey = null;
 
     toast('تم إلغاء المراجعة. لم يتم حفظ أي بيانات.');
   }
@@ -896,45 +875,47 @@
   async function saveImportedInvoice() {
     if (!draft || saving) return;
 
-    updateReview();
+    refresh();
 
-    if ($('saveImportedInvoiceBtn').disabled) {
+    const button = $('saveImportedInvoiceBtn');
+
+    if (button.disabled) {
       toast('راجع الأخطاء والتأكيدات المطلوبة قبل الحفظ.');
       return;
     }
-
-    const button = $('saveImportedInvoiceBtn');
 
     saving = true;
     button.disabled = true;
     button.textContent = 'جارٍ الحفظ...';
 
     try {
-      const date = dateValue(
-        $('importInvoiceDate').value
-      );
-
+      const date = dateValue($('importInvoiceDate').value);
       const category = $('importInvoiceCategory').value;
 
-      const invoiceItems = items.map(item => ({
-        name: String(item.name).trim(),
-        paidQty: Number(item.paidQty),
-        bonusQty: Number(item.bonusQty),
-        receivedQty: Number(item.receivedQty),
-        unitPrice: Number(item.unitPrice),
-        itemTotal: round(Number(item.itemTotal)),
-        effectiveUnitCost: item.effectiveUnitCost,        manufacturer: item.manufacturer,
-        strength: item.strength,
-        dosageForm: item.dosageForm,
-        packageSize: item.packageSize,
-        barcode: item.barcode,
-        batchNumber: item.batchNumber,
-        expiryDate: item.expiryDate,
-        pageNumber: item.pageNumber,
-        rowNumber: item.rowNumber,
-        confidence: item.confidence,
-        notes: item.notes
-      }));
+      const invoiceItems = items.map(item => {
+        const itemTotal = round(item.itemTotal);
+
+        return {
+          name: item.name.trim(),
+          paidQty: item.paidQty,
+          bonusQty: item.bonusQty,
+          receivedQty: item.receivedQty,
+          unitPrice: item.unitPrice,
+          itemTotal,
+          effectiveUnitCost: item.effectiveUnitCost,
+          manufacturer: item.manufacturer,
+          strength: item.strength,
+          dosageForm: item.dosageForm,
+          packageSize: item.packageSize,
+          barcode: item.barcode,
+          batchNumber: item.batchNumber,
+          expiryDate: item.expiryDate,
+          pageNumber: item.pageNumber,
+          rowNumber: item.rowNumber,
+          confidence: item.confidence,
+          notes: item.notes
+        };
+      });
 
       const total = round(
         invoiceItems.reduce(
@@ -943,6 +924,12 @@
         )
       );
 
+      const supplier = String($('importSupplier').value || '').trim();
+      const customer = String($('importCustomer').value || '').trim();
+      const representative = String($('importRepresentative').value || '').trim();
+      const representativePhone = String($('importRepresentativePhone').value || '').trim();
+      const invoiceType = String($('importInvoiceType').value || '').trim();
+
       const invoice = {
         category,
         number: String($('importInvoiceNumber').value || '').trim(),
@@ -950,19 +937,17 @@
         month: date.slice(0, 7),
         notes: [
           'فاتورة مستوردة من نص منظم.',
-          'المورد: ' + $('importSupplier').value,
-          'العميل: ' + $('importCustomer').value,
-          'المندوب: ' + $('importRepresentative').value,
-          'هاتف المندوب: ' + $('importRepresentativePhone').value,
-          'نوع الفاتورة: ' + $('importInvoiceType').value
+          'المورد: ' + supplier,
+          'العميل: ' + customer,
+          'المندوب: ' + representative,
+          'هاتف المندوب: ' + representativePhone,
+          'نوع الفاتورة: ' + invoiceType
         ].join('\n'),
-        supplier: String($('importSupplier').value || '').trim(),
-        customer: String($('importCustomer').value || '').trim(),
-        representative: String($('importRepresentative').value || '').trim(),
-        representativePhone: String(
-          $('importRepresentativePhone').value || ''
-        ).trim(),
-        invoiceType: String($('importInvoiceType').value || '').trim(),
+        supplier,
+        customer,
+        representative,
+        representativePhone,
+        invoiceType,
         printedTotal: numberValue($('importPrintedTotal').value),
         items: invoiceItems,
         total,
@@ -989,6 +974,8 @@
       draft = null;
       items = [];
       duplicateFound = false;
+      mismatchApprovedKey = null;
+      duplicateApprovedKey = null;
 
       toast('تم حفظ الفاتورة بنجاح في قاعدة البيانات المحلية.');
 
@@ -999,41 +986,30 @@
       button.textContent = 'حفظ الفاتورة في الحسابات';
 
       if (draft) {
-        updateReview();
+        refresh();
       }
     }
   }
 
   function init() {
-    $('parseInvoiceTextBtn')?.addEventListener(
-      'click',
-      parseInvoice
-    );
+    $('parseInvoiceTextBtn')?.addEventListener('click', parseInvoice);
+    $('clearInvoiceTextBtn')?.addEventListener('click', clearImport);
+    $('cancelInvoiceImportBtn')?.addEventListener('click', cancelReview);
+    $('saveImportedInvoiceBtn')?.addEventListener('click', saveImportedInvoice);
 
-    $('clearInvoiceTextBtn')?.addEventListener(
-      'click',
-      clearImport
-    );
+    $('importConfirmMismatch')?.addEventListener('change', () => {
+      mismatchApprovedKey = $('importConfirmMismatch').checked
+        ? currentMismatchKey()
+        : null;
+      refresh();
+    });
 
-    $('cancelInvoiceImportBtn')?.addEventListener(
-      'click',
-      cancelReview
-    );
-
-    $('saveImportedInvoiceBtn')?.addEventListener(
-      'click',
-      saveImportedInvoice
-    );
-
-    $('importConfirmMismatch')?.addEventListener(
-      'change',
-      updateReview
-    );
-
-    $('importConfirmDuplicate')?.addEventListener(
-      'change',
-      updateReview
-    );
+    $('importConfirmDuplicate')?.addEventListener('change', () => {
+      duplicateApprovedKey = $('importConfirmDuplicate').checked
+        ? currentDuplicateKey()
+        : null;
+      refresh();
+    });
 
     [
       'importSupplier',
@@ -1045,21 +1021,21 @@
       $(id)?.addEventListener('change', async () => {
         if (!draft) return;
 
-        if (id === 'importInvoiceNumber' ||
-            id === 'importSupplier' ||
-            id === 'importInvoiceDate') {
+        if (
+          id === 'importInvoiceNumber' ||
+          id === 'importSupplier' ||
+          id === 'importInvoiceDate'
+        ) {
           await checkDuplicates();
         }
 
-        updateReview();
+        refresh();
       });
     });
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, {
-      once: true
-    });
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
