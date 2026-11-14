@@ -923,18 +923,7 @@
         receivedQty: Number(item.receivedQty),
         unitPrice: Number(item.unitPrice),
         itemTotal: round(Number(item.itemTotal)),
-        effectiveUnitCost:
-          item.effectiveUnitCost !== null
-            ? Number(item.effectiveUnitCost)
-            : (
-                Number(item.receivedQty) > 0
-                  ? round(
-                      Number(item.itemTotal) /
-                      Number(item.receivedQty)
-                    )
-                  : 0
-              ),
-        manufacturer: item.manufacturer,
+        effectiveUnitCost: item.effectiveUnitCost,        manufacturer: item.manufacturer,
         strength: item.strength,
         dosageForm: item.dosageForm,
         packageSize: item.packageSize,
