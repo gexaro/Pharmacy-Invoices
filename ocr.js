@@ -47,7 +47,8 @@
 
   function parseNumber(value) {
     const normalized = normalizeDigits(value)
-      .replace(/[٬،,'’‘٫]/g, '')
+      .replace(/٫/g, '.')
+      .replace(/[٬،,'’‘]/g, '')
       .replace(/[^\d.-]/g, '');
 
     if (!normalized || !/\d/.test(normalized)) return null;
@@ -71,6 +72,22 @@
         value: parseNumber(token)
       }))
       .filter(item => item.value !== null);
+  }
+
+  function isDateToken(value) {
+    const digits = String(value).replace(/\D/g, '');
+
+    if (!/^(19|20)\d{6}$/.test(digits)) return false;
+
+    const year = Number(digits.slice(0, 4));
+    const month = Number(digits.slice(4, 6));
+    const day = Number(digits.slice(6, 8));
+
+    const date = new Date(year, month - 1, day);
+
+    return date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day;
   }
 
   function setProgress(percent, status) {
@@ -140,11 +157,19 @@
       throw new Error('أبعاد إحدى الصور غير صالحة.');
     }
 
-    const scale = Math.min(1.7, Math.max(1, 2200 / originalWidth));
+    const maxPixels = 8000000;
+
+    const scale = Math.min(
+      1.7,
+      2200 / originalWidth,
+      4000 / originalHeight,
+      Math.sqrt(maxPixels / (originalWidth * originalHeight))
+    );
+
     const canvas = document.createElement('canvas');
 
-    canvas.width = Math.round(originalWidth * scale);
-    canvas.height = Math.round(originalHeight * scale);
+    canvas.width = Math.max(1, Math.round(originalWidth * scale));
+    canvas.height = Math.max(1, Math.round(originalHeight * scale));
 
     const context = canvas.getContext('2d', {
       willReadFrequently: true
@@ -158,7 +183,21 @@
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    let pixels;
+
+    try {
+      pixels = context.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+    } catch (error) {
+      canvas.width = 0;
+      canvas.height = 0;
+      throw new Error('الصورة كبيرة أو تعذرت معالجتها على هذا الجهاز.');
+    }
+
     const data = pixels.data;
     const contrast = 1.22;
 
@@ -366,7 +405,9 @@
         group.sort((a, b) => a.left - b.left);
 
         const top = Math.min(...group.map(word => word.top));
-        const bottom = Math.max(...group.map(word => word.top + word.height));
+        const bottom = Math.max(
+          ...group.map(word => word.top + word.height)
+        );
 
         return {
           words: group,
@@ -386,78 +427,83 @@
   function extractInvoiceNumber(lines) {
     const candidates = [];
 
-    lines.filter(line => line.centerY < 0.27).forEach(line => {
-      const text = normalizeDigits(line.text);
+    lines
+      .filter(line => line.centerY < 0.27)
+      .forEach(line => {
+        const text = normalizeDigits(line.text);
 
-      if (!/فاتور|رقم|invoice|inv\b/i.test(text)) return;
+        if (!/فاتور|رقم|invoice|inv\b/i.test(text)) return;
 
-      const tokens = extractNumberTokens(text)
-        .filter(item => {
-          const digits = String(Math.trunc(item.value));
-          return digits.length >= 5 &&
-            digits.length <= 10 &&
-            !digits.startsWith('202');
-        });
+        const tokens = extractNumberTokens(text)
+          .filter(item => {
+            const digits = String(Math.trunc(item.value));
 
-      tokens.forEach(token => {
-        candidates.push({
-          value: String(Math.trunc(token.value)),
-          confidence: line.averageConfidence || 0,
-          hasInvoiceWord: /فاتور|invoice|inv\b/i.test(text)
+            return digits.length >= 5 &&
+              digits.length <= 10 &&
+              !isDateToken(item.text);
+          });
+
+        tokens.forEach(token => {
+          candidates.push({
+            value: String(Math.trunc(token.value)),
+            confidence: line.averageConfidence || 0
+          });
         });
       });
-    });
 
-    const unique = [...new Set(candidates.map(item => item.value))];
+    const unique = [...new Set(
+      candidates.map(item => item.value)
+    )];
 
-    // إذا ظهر أكثر من رقم محتمل، لا نخمن رقم الفاتورة.
     if (unique.length !== 1) return null;
 
-    const selected = candidates.find(item => item.value === unique[0]);
+    const selected = candidates.find(
+      item => item.value === unique[0]
+    );
 
     if (!selected || selected.confidence < 35) return null;
 
     return selected.value;
   }
 
-  function extractPrintedTotal(lines, imageHeight) {
+  function extractPrintedTotal(lines) {
     const candidates = [];
 
-    lines.filter(line => line.centerY > 0.58).forEach(line => {
-      const text = line.text;
+    lines
+      .filter(line => line.centerY > 0.58)
+      .forEach(line => {
+        if (!/اجمال|إجمال|المجموع|total/i.test(line.text)) {
+          return;
+        }
 
-      if (!/اجمال|إجمال|المجموع|total/i.test(text)) return;
+        const numericWords = line.words.filter(word =>
+          parseNumber(word.text) !== null &&
+          word.confidence >= 30
+        );
 
-      const numericWords = line.words.filter(word => {
-        return parseNumber(word.text) !== null &&
-          word.confidence >= 30;
+        const columnCandidates = numericWords.filter(word =>
+          word.centerX >= COLUMNS.value[0] - 0.025 &&
+          word.centerX <= COLUMNS.value[1] + 0.04
+        );
+
+        let selected = null;
+
+        if (columnCandidates.length === 1) {
+          selected = columnCandidates[0];
+        } else if (columnCandidates.length > 1) {
+          return;
+        } else if (numericWords.length === 1) {
+          selected = numericWords[0];
+        } else {
+          return;
+        }
+
+        const value = parseNumber(selected.text);
+
+        if (value !== null && value > 0) {
+          candidates.push(value);
+        }
       });
-
-      // الإجمالي غالباً يقع ضمن عمود القيمة.
-      const columnCandidates = numericWords.filter(word =>
-        word.centerX >= COLUMNS.value[0] - 0.025 &&
-        word.centerX <= COLUMNS.value[1] + 0.04
-      );
-
-      let selected = null;
-
-      if (columnCandidates.length === 1) {
-        selected = columnCandidates[0];
-      } else if (columnCandidates.length > 1) {
-        // عند تعدد الأرقام في عمود القيمة لا نختار عشوائياً.
-        return;
-      } else if (numericWords.length === 1) {
-        selected = numericWords[0];
-      } else {
-        return;
-      }
-
-      const value = parseNumber(selected.text);
-
-      if (value !== null && value > 0) {
-        candidates.push(value);
-      }
-    });
 
     const unique = [...new Set(candidates)];
 
@@ -466,7 +512,7 @@
 
   function findTableBounds(lines, imageHeight) {
     const header = lines.find(line => {
-      if (line.centerY > imageHeight * 0.55) return false;
+      if (line.centerY > 0.55) return false;
 
       return /المادة|الكمية|السعر|القيمة/.test(line.text);
     });
@@ -477,7 +523,7 @@
 
     const totalLine = lines.find(line =>
       line.top > headerBottom &&
-      line.centerY > imageHeight * 0.52 &&
+      line.centerY > 0.52 &&
       /اجمال|إجمال|المجموع|total/i.test(line.text)
     );
 
@@ -485,7 +531,7 @@
       top: headerBottom + imageHeight * 0.006,
       bottom: totalLine
         ? totalLine.top - imageHeight * 0.004
-        : imageHeight * 0.70
+        : imageHeight * 0.90
     };
   }
 
@@ -503,12 +549,20 @@
     filtered.forEach(word => {
       let row = rows[rows.length - 1];
 
-      if (!row || Math.abs(row.centerY - word.centerY) > tolerance) {
-        row = { words: [], centerY: word.centerY };
+      if (
+        !row ||
+        Math.abs(row.centerY - word.centerY) > tolerance
+      ) {
+        row = {
+          words: [],
+          centerY: word.centerY
+        };
+
         rows.push(row);
       }
 
       row.words.push(word);
+
       row.centerY = row.words.reduce(
         (sum, item) => sum + item.centerY,
         0
@@ -522,7 +576,10 @@
     const [min, max] = COLUMNS[column];
 
     return words
-      .filter(word => word.centerX >= min && word.centerX < max)
+      .filter(word =>
+        word.centerX >= min &&
+        word.centerX < max
+      )
       .sort((a, b) => a.left - b.left);
   }
 
@@ -546,10 +603,16 @@
   }
 
   function cleanItemName(words) {
-    return words.map(word => word.text).join(' ')
+    return words
+      .map(word => word.text)
+      .join(' ')
       .replace(/[|:؛،]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function rowText(row) {
+    return row.words.map(word => word.text).join(' ');
   }
 
   function extractPageItems(words, lines, imageHeight, pageNumber) {
@@ -565,6 +628,7 @@
       const valueWords = wordsInColumn(row.words, 'value');
 
       const name = cleanItemName(nameWords);
+      const normalizedName = normalizeName(name);
       const paidQty = readCell(quantityWords);
       const unitPrice = readCell(priceWords);
       const printedValue = readCell(valueWords);
@@ -574,11 +638,72 @@
         0
       ) / Math.max(1, row.words.length);
 
+      const validName = name.length >= 2 && normalizedName.length > 0;
+      const validQuantity =
+        Number.isSafeInteger(paidQty) && paidQty > 0;
+
+      if (rowConfidence < 35) {
+        if (name || quantityWords.length || priceWords.length) {
+          unresolved.push({
+            page: pageNumber,
+            row: index + 1,
+            text: rowText(row),
+            reason: 'ثقة القراءة منخفضة'
+          });
+        }
+
+        return;
+      }
+
+      /*
+       * اكتشاف البونص قبل التحقق من السعر:
+       * لا يُقبل كبونص إلا إذا كان الاسم مطابقاً للصنف السابق،
+       * والكمية صحيحة، وعمودا السعر والقيمة فارغين تماماً.
+       */
       if (
-        !name ||
-        name.length < 2 ||
-        !Number.isSafeInteger(paidQty) ||
-        paidQty <= 0 ||
+        validName &&
+        validQuantity &&
+        priceWords.length === 0 &&
+        valueWords.length === 0
+      ) {
+        const previous = items[items.length - 1];
+
+        if (
+          previous &&
+          previous.normalizedName === normalizedName
+        ) {
+          const newBonus = previous.bonusQty + paidQty;
+
+          if (Number.isSafeInteger(newBonus)) {
+            previous.bonusQty = newBonus;
+            previous.warning =
+              'تم احتساب صف لاحق كبونص؛ يرجى التأكد يدوياً.';
+
+            previous.sourceRows.push({
+              page: pageNumber,
+              text: rowText(row),
+              paidQty,
+              unitPrice: null,
+              printedValue: null
+            });
+
+            return;
+          }
+        }
+
+        unresolved.push({
+          page: pageNumber,
+          row: index + 1,
+          text: rowText(row),
+          reason: 'صف بلا سعر أو قيمة، ولم يتطابق اسمه مع الصنف السابق'
+        });
+
+        return;
+      }
+
+      if (
+        !validName ||
+        !validQuantity ||
         unitPrice === null ||
         !Number.isFinite(unitPrice) ||
         unitPrice < 0
@@ -587,7 +712,7 @@
           unresolved.push({
             page: pageNumber,
             row: index + 1,
-            text: row.words.map(word => word.text).join(' '),
+            text: rowText(row),
             reason: 'بيانات الصنف أو الكمية أو السعر غير مكتملة'
           });
         }
@@ -595,19 +720,9 @@
         return;
       }
 
-      if (rowConfidence < 35) {
-        unresolved.push({
-          page: pageNumber,
-          row: index + 1,
-          text: row.words.map(word => word.text).join(' '),
-          reason: 'ثقة القراءة منخفضة'
-        });
-        return;
-      }
-
       const item = {
         name,
-        normalizedName: normalizeName(name),
+        normalizedName,
         paidQty,
         bonusQty: 0,
         unitPrice,
@@ -615,7 +730,7 @@
         page: pageNumber,
         sourceRows: [{
           page: pageNumber,
-          text: row.words.map(word => word.text).join(' '),
+          text: rowText(row),
           paidQty,
           unitPrice,
           printedValue
@@ -623,42 +738,26 @@
         warning: ''
       };
 
-      const previous = items[items.length - 1];
-
-      // لا نضيف البونص تلقائياً إلا إذا تطابق الاسم
-      // وكانت خلية القيمة والسعر فارغتين في صف البونص.
-      if (printedValue === null) {
-        const hasNoPrice = priceWords.length === 0;
-        const sameName = previous &&
-          previous.normalizedName === item.normalizedName;
-
-        if (sameName && hasNoPrice) {
-          previous.bonusQty += paidQty;
-          previous.warning =
-            'تم احتساب صف لاحق كبونص؛ يرجى التأكد يدوياً.';
-          previous.sourceRows.push(item.sourceRows[0]);
-        } else {
-          unresolved.push({
-            page: pageNumber,
-            row: index + 1,
-            text: item.sourceRows[0].text,
-            reason: 'صف غير واضح؛ لم يتم احتسابه كبونص تلقائياً'
-          });
-        }
-
-        return;
-      }
-
       const calculatedValue = paidQty * unitPrice;
 
-      if (Math.abs(calculatedValue - printedValue) > 1) {
-        item.warning = 'القيمة المطبوعة لا تطابق الكمية × السعر';
+      if (printedValue === null) {
+        item.warning =
+          'تعذرت قراءة قيمة الصنف المطبوعة؛ تم حسابها من الكمية والسعر.';
+      } else if (
+        Math.abs(calculatedValue - printedValue) > 1
+      ) {
+        item.warning =
+          'القيمة المطبوعة لا تطابق الكمية × السعر.';
       }
 
       items.push(item);
     });
 
-    return { items, unresolved, bounds };
+    return {
+      items,
+      unresolved,
+      bounds
+    };
   }
 
   function comparePages(results) {
@@ -693,7 +792,9 @@
     const merged = [];
 
     results.forEach(result => {
-      result.items.forEach(item => merged.push({ ...item }));
+      result.items.forEach(item => {
+        merged.push({ ...item });
+      });
     });
 
     return merged;
@@ -709,6 +810,7 @@
       reviewWarnings.push(
         'لم يتم تحديد الإجمالي المطبوع بثقة؛ تمت مراجعة الأصناف دون مقارنة الإجمالي.'
       );
+
       return;
     }
 
@@ -759,7 +861,10 @@
       remove.type = 'button';
       remove.className = 'remove-item';
       remove.textContent = '×';
-      remove.setAttribute('aria-label', 'حذف الصنف من نتائج القراءة');
+      remove.setAttribute(
+        'aria-label',
+        'حذف الصنف من نتائج القراءة'
+      );
 
       remove.addEventListener('click', () => {
         lastCandidates.splice(index, 1);
@@ -800,7 +905,11 @@
 
         input.addEventListener('input', () => {
           candidate[key] = type === 'number'
-            ? (input.value.trim() === '' ? null : Number(input.value))
+            ? (
+                input.value.trim() === ''
+                  ? null
+                  : Number(input.value)
+              )
             : input.value;
         });
 
@@ -821,7 +930,8 @@
     });
 
     if (count) {
-      count.textContent = lastCandidates.length + ' أصناف مقترحة';
+      count.textContent =
+        lastCandidates.length + ' أصناف مقترحة';
     }
 
     if (hint) {
@@ -829,9 +939,13 @@
         'راجع الأصناف قبل الإضافة.';
     }
 
-    if (raw) raw.textContent = lastRawText;
+    if (raw) {
+      raw.textContent = lastRawText;
+    }
 
-    if (addButton) addButton.disabled = invoiceMismatch;
+    if (addButton) {
+      addButton.disabled = invoiceMismatch;
+    }
 
     panel.hidden = false;
   }
@@ -853,29 +967,37 @@
     resetResults();
     setProgress(0, 'جارٍ تشغيل محرك قراءة الفواتير...');
 
-    worker = await window.Tesseract.createWorker(
-      'ara+eng',
-      1,
-      {
-        logger(message) {
-          if (message && typeof message.progress === 'number') {
-            const progress = message.status === 'recognizing text'
-              ? message.progress * 100
-              : Math.min(15, message.progress * 15);
+    try {
+      worker = await window.Tesseract.createWorker(
+        'ara+eng',
+        1,
+        {
+          logger(message) {
+            if (
+              message &&
+              typeof message.progress === 'number'
+            ) {
+              const progress =
+                message.status === 'recognizing text'
+                  ? message.progress * 100
+                  : Math.min(15, message.progress * 15);
 
-            setProgress(
-              progress,
-              message.status === 'recognizing text'
-                ? 'جارٍ تحليل النصوص والأعمدة...'
-                : 'جارٍ تجهيز محرك القراءة...'
-            );
+              setProgress(
+                progress,
+                message.status === 'recognizing text'
+                  ? 'جارٍ تحليل النصوص والأعمدة...'
+                  : 'جارٍ تجهيز محرك القراءة...'
+              );
+            }
           }
         }
-      }
-    );
+      );
 
-    try {
-      for (let index = 0; index < selectedFiles.length; index += 1) {
+      for (
+        let index = 0;
+        index < selectedFiles.length;
+        index += 1
+      ) {
         const pageNumber = index + 1;
 
         setProgress(
@@ -884,43 +1006,54 @@
           ' من ' + selectedFiles.length
         );
 
-        const prepared = await prepareImage(selectedFiles[index]);
-
-        const result = await worker.recognize(
-          prepared.canvas,
-          {},
-          { text: true, tsv: true }
+        const prepared = await prepareImage(
+          selectedFiles[index]
         );
 
-        const text = result?.data?.text || '';
-        const words = parseTSV(
-          result?.data?.tsv || '',
-          prepared.width,
-          prepared.height
-        );
+        try {
+          const result = await worker.recognize(
+            prepared.canvas,
+            {},
+            { text: true, tsv: true }
+          );
 
-        const lines = groupWordsByLine(words);
-        const invoiceNumber = extractInvoiceNumber(lines);
-        const printedTotal = extractPrintedTotal(lines, prepared.height);
+          const text = result?.data?.text || '';
 
-        const extracted = extractPageItems(
-          words,
-          lines,
-          prepared.height,
-          pageNumber
-        );
+          const words = parseTSV(
+            result?.data?.tsv || '',
+            prepared.width,
+            prepared.height
+          );
 
-        pageResults.push({
-          page: pageNumber,
-          text,
-          invoiceNumber,
-          printedTotal,
-          items: extracted.items,
-          unresolved: extracted.unresolved
-        });
+          const lines = groupWordsByLine(words);
+          const invoiceNumber = extractInvoiceNumber(lines);
+          const printedTotal = extractPrintedTotal(lines);
 
-        lastRawText +=
-          '\n\n========== الصفحة ' + pageNumber + ' ==========\n' + text;
+          const extracted = extractPageItems(
+            words,
+            lines,
+            prepared.height,
+            pageNumber
+          );
+
+          pageResults.push({
+            page: pageNumber,
+            text,
+            invoiceNumber,
+            printedTotal,
+            items: extracted.items,
+            unresolved: extracted.unresolved
+          });
+
+          lastRawText +=
+            '\n\n========== الصفحة ' +
+            pageNumber +
+            ' ==========\n' +
+            text;
+        } finally {
+          prepared.canvas.width = 0;
+          prepared.canvas.height = 0;
+        }
 
         setProgress(
           ((index + 1) / selectedFiles.length) * 100,
@@ -954,7 +1087,8 @@
       page.items.forEach(item => {
         if (item.warning) {
           reviewWarnings.push(
-            'تحذير في الصفحة ' + page.page + ': ' + item.name
+            'تحذير في الصفحة ' + page.page +
+            ': ' + item.name
           );
         }
       });
@@ -974,7 +1108,11 @@
       $('invoiceNumber').value = firstNumber;
     }
 
-    setProgress(100, 'اكتملت قراءة جميع الصفحات. راجع النتائج.');
+    setProgress(
+      100,
+      'اكتملت قراءة جميع الصفحات. راجع النتائج.'
+    );
+
     renderReview();
 
     if (!lastCandidates.length) {
@@ -1009,19 +1147,51 @@
       if (!accepted) return;
     }
 
-    const valid = lastCandidates.filter(item =>
-      typeof item.name === 'string' &&
-      item.name.trim() &&
-      Number.isSafeInteger(Number(item.paidQty)) &&
-      Number(item.paidQty) > 0 &&
-      Number.isSafeInteger(Number(item.bonusQty)) &&
-      Number(item.bonusQty) >= 0 &&
-      Number.isFinite(Number(item.unitPrice)) &&
-      Number(item.unitPrice) >= 0
-    );
+    const valid = lastCandidates.filter(item => {
+      if (
+        typeof item.name !== 'string' ||
+        !item.name.trim()
+      ) {
+        return false;
+      }
+
+      const paidQty = Number(item.paidQty);
+
+      const bonusQty =
+        item.bonusQty == null || item.bonusQty === ''
+          ? 0
+          : Number(item.bonusQty);
+
+      if (
+        !Number.isSafeInteger(paidQty) ||
+        paidQty <= 0 ||
+        !Number.isSafeInteger(bonusQty) ||
+        bonusQty < 0
+      ) {
+        return false;
+      }
+
+      // لا نحول null أو النص الفارغ إلى سعر صفر.
+      if (
+        item.unitPrice === null ||
+        item.unitPrice === undefined ||
+        String(item.unitPrice).trim() === ''
+      ) {
+        return false;
+      }
+
+      const unitPrice = Number(item.unitPrice);
+
+      return Number.isFinite(unitPrice) &&
+        unitPrice >= 0 &&
+        unitPrice <= Number.MAX_SAFE_INTEGER;
+    });
 
     if (!valid.length) {
-      toast('لا توجد أصناف صالحة للإضافة. راجع القيم أولاً.');
+      toast(
+        'لا توجد أصناف صالحة للإضافة. راجع الاسم والكمية والسعر أولاً.'
+      );
+
       return;
     }
 
@@ -1036,9 +1206,12 @@
     try {
       window.PharmacyInvoice.addMany(
         valid.map(item => ({
-          name: item.name,
+          name: item.name.trim(),
           paidQty: Number(item.paidQty),
-          bonusQty: Number(item.bonusQty),
+          bonusQty:
+            item.bonusQty == null || item.bonusQty === ''
+              ? 0
+              : Number(item.bonusQty),
           unitPrice: Number(item.unitPrice)
         }))
       );
@@ -1108,27 +1281,35 @@
 
     $('clearInvoiceImagesBtn')?.addEventListener('click', () => {
       selectedFiles = [];
+
       if (input) input.value = '';
+
       resetResults();
       renderSelectedImages();
     });
 
-    $('runOcrBtn')?.addEventListener('click', async () => {
-      clearError();
+    $('runOcrBtn')?.addEventListener(
+      'click',
+      async () => {
+        clearError();
 
-      const button = $('runOcrBtn');
-      if (button) button.disabled = true;
+        const button = $('runOcrBtn');
 
-      try {
-        await recognizeImages();
-      } catch (error) {
-        showError(error.message || 'حدث خطأ أثناء قراءة الصور.');
-      } finally {
-        if (button) {
-          button.disabled = selectedFiles.length === 0;
+        if (button) button.disabled = true;
+
+        try {
+          await recognizeImages();
+        } catch (error) {
+          showError(
+            error.message || 'حدث خطأ أثناء قراءة الصور.'
+          );
+        } finally {
+          if (button) {
+            button.disabled = selectedFiles.length === 0;
+          }
         }
       }
-    });
+    );
 
     $('addOcrItemsBtn')?.addEventListener(
       'click',
@@ -1153,7 +1334,11 @@
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once: true });
+    document.addEventListener(
+      'DOMContentLoaded',
+      init,
+      { once: true }
+    );
   } else {
     init();
   }
