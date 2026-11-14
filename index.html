@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -43,8 +42,7 @@
         <section class="section-block">
           <div class="section-heading"><div><span class="eyebrow">إدارة الصيدلية</span><h2>الإجراءات السريعة</h2></div></div>
           <div class="actions-grid">
-            <button class="action-card" type="button" data-page="invoice"><span class="action-icon">＋</span><strong>فاتورة جديدة</strong><small>تصوير وقراءة الفاتورة</small></button>
-            <button class="action-card" type="button" data-page="import"><span class="action-icon">⇩</span><strong>استيراد نص فاتورة</strong><small>لصق البيانات المستخرجة وتنظيمها</small></button>
+            <button class="action-card" type="button" data-page="invoice"><span class="action-icon">＋</span><strong>فاتورة جديدة</strong><small>استيراد نص أو إدخال يدوي</small></button>
             <button class="action-card" type="button" data-page="return"><span class="action-icon">↩</span><strong>مردود</strong><small>تسجيل مواد مرتجعة</small></button>
             <button class="action-card" type="button" data-page="payment"><span class="action-icon">د.ع</span><strong>تسديد</strong><small>إدارة حساب المورد</small></button>
             <button class="action-card" type="button" data-page="reports"><span class="action-icon">▤</span><strong>التقارير</strong><small>تحليل المشتريات</small></button>
@@ -54,65 +52,20 @@
       </section>
 
       <section class="page-section" id="page-invoice" data-page-panel="invoice" hidden>
-        <div class="section-heading"><div><span class="eyebrow">المشتريات</span><h1>إضافة فاتورة</h1><p>صوّر الفاتورة وراجع البيانات المستخرجة قبل الحفظ</p></div></div>
-        <div class="panel">
-          <div class="form-grid">
-            <div class="field"><label for="invoiceType">فئة الفاتورة</label><select id="invoiceType"><option value="medicine">الأدوية</option><option value="general">قديم + مواد عامة</option></select></div>
-            <div class="field"><label for="invoiceNumber">رقم الفاتورة</label><input id="invoiceNumber" type="text" placeholder="رقم الفاتورة"></div>
-            <div class="field"><label for="invoiceDate">تاريخ الفاتورة</label><input id="invoiceDate" type="date"></div>
-            <div class="field"><label for="invoiceNotes">ملاحظات</label><input id="invoiceNotes" type="text" placeholder="اختياري"></div>
-          </div>
-        </div>
-        <div class="panel ocr-panel">
-          <div class="section-heading"><div><span class="eyebrow">التعرف الضوئي OCR</span><h2>قراءة الفاتورة بالكاميرا</h2><p>قراءة النصوص العربية والإنجليزية</p></div><span class="ocr-icon">⌁</span></div>
-          <input id="invoiceCameraInput" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple>
-          <div class="camera-actions"><button id="openCameraBtn" class="primary-button" type="button">▣ تصوير الفاتورة</button><button id="chooseInvoiceImagesBtn" class="secondary-button" type="button">اختيار صور</button></div>
-          <div id="ocrImagePreview" class="ocr-image-preview" hidden><div class="subsection-heading"><h3>الصور المختارة</h3><button id="clearInvoiceImagesBtn" class="text-button" type="button">حذف الصور</button></div><div id="ocrImageList" class="ocr-image-list"></div></div>
-          <div class="ocr-info"><span>i</span><p>تتم قراءة الصور داخل المتصفح. اقتراح الكمية والسعر يعتمد على نمط الأرقام في السطر وقد يخطئ عند اختلاف ترتيب الأعمدة؛ لذلك يجب مراجعة كل صنف قبل الحفظ.</p></div>
-          <button id="runOcrBtn" class="primary-button full-button" type="button" disabled>استخراج بيانات الفاتورة</button>
-          <div id="ocrProgressArea" class="ocr-progress-area" hidden><div class="progress-heading"><span id="ocrStatusText">جارٍ تجهيز محرك القراءة...</span><strong id="ocrProgressPercent">0%</strong></div><div class="progress-track"><div id="ocrProgressBar" class="progress-fill"></div></div></div>
-          <div id="ocrError" class="message-box error-message" role="alert" hidden></div>
-        </div>
-        <div id="ocrReviewPanel" class="panel" hidden>
-          <div class="section-heading"><div><span class="eyebrow">مراجعة البيانات</span><h2>الأصناف المستخرجة</h2><p>صحح الاسم والكميات والأسعار قبل الإضافة</p></div></div>
-          <div class="ocr-review-summary"><span id="ocrDetectedCount">0 أصناف</span><span id="ocrReviewHint">النتائج تقديرية وتحتاج مراجعتك</span></div>
-          <div id="ocrReviewList" class="ocr-review-list"></div>
-          <div class="review-actions"><button id="addOcrItemsBtn" class="primary-button" type="button">إضافة الأصناف إلى الفاتورة</button><button id="discardOcrBtn" class="secondary-button" type="button">إلغاء المراجعة</button></div>
-          <details class="ocr-raw-details"><summary>عرض النص الخام المستخرج</summary><pre id="ocrRawText" class="ocr-raw-text"></pre></details>
-        </div>
-        <div class="panel">
-          <div class="subsection-heading"><div><h2>إضافة أو تصحيح صنف</h2><span class="muted-text">يمكنك إدخال الصنف يدوياً أو تصحيحه</span></div></div>
-          <div class="form-grid item-entry">
-            <div class="field field-wide"><label for="itemName">اسم الصنف</label><input id="itemName" type="text" placeholder="اسم الدواء أو المادة"></div>
-            <div class="field"><label for="itemPaidQty">الكمية المدفوعة</label><input id="itemPaidQty" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></div>
-            <div class="field"><label for="itemBonusQty">كمية البونص</label><input id="itemBonusQty" type="number" min="0" step="1" inputmode="numeric" value="0"></div>
-            <div class="field"><label for="itemUnitPrice">سعر الوحدة</label><input id="itemUnitPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
-          </div>
-          <button id="addItemBtn" class="secondary-button full-button" type="button">إضافة الصنف</button>
-        </div>
-        <div class="panel">
-          <div class="subsection-heading"><div><h2>أصناف الفاتورة</h2><span class="muted-text">القيمة تحسب من الكمية المدفوعة × سعر الوحدة</span></div><span id="invoiceItemCount" class="count-badge">0</span></div>
-          <div id="invoiceItemsList" class="invoice-items-list"><p class="empty-state">لم تتم إضافة أصناف بعد</p></div>
-          <div class="invoice-total"><span>إجمالي الفاتورة</span><strong id="invoiceTotal">0 د.ع</strong></div>
-          <button id="saveInvoiceBtn" class="primary-button full-button" type="button">حفظ الفاتورة</button>
-          <button id="resetInvoiceBtn" class="text-button full-button" type="button">تفريغ نموذج الفاتورة</button>
-        </div>
-      </section>
 
-      <!-- استيراد فاتورة من نص -->
-      <section class="page-section" id="page-import" data-page-panel="import" hidden>
+        <!-- استيراد فاتورة من نص -->
         <div class="section-heading">
           <div>
             <span class="eyebrow">استيراد ذكي</span>
-            <h1>استيراد فاتورة من نص</h1>
-            <p>الصق النص المستخرج وسيقوم التطبيق بتحليله وتنظيمه ومراجعته</p>
+            <h1>إضافة فاتورة</h1>
+            <p>الصق نص الفاتورة المستخرج، أو أدخل الفاتورة يدوياً أدناه</p>
           </div>
         </div>
 
         <div class="panel">
           <div class="section-heading">
             <div>
-              <h2>النص المستخرج</h2>
+              <h2>استيراد من نص</h2>
               <p>الصق النص الكامل الذي يبدأ بـ PHARMACY_INVOICE_DATA_V1</p>
             </div>
           </div>
@@ -172,7 +125,7 @@
                   <option value="general">المواد العامة</option>
                 </select>
               </div>
-                            <div class="field">
+              <div class="field">
                 <label for="importPrintedTotal">الإجمالي المطبوع</label>
                 <input id="importPrintedTotal" type="number" min="0" step="any">
               </div>
@@ -185,7 +138,7 @@
               <div>
                 <span class="eyebrow">مراجعة الأصناف</span>
                 <h2>الأصناف المنظمة</h2>
-                <p>يمكن تعديل الاسم والفئة والكمية والسعر قبل الحفظ</p>
+                <p>يمكن تعديل الاسم والكمية والسعر قبل الحفظ</p>
               </div>
               <span id="importItemCount" class="count-badge">0</span>
             </div>
@@ -216,6 +169,54 @@
             </div>
           </div>
         </div>
+
+        <!-- إدخال يدوي وOCR -->
+        <div class="section-heading" style="margin-top: 28px;">
+          <div><span class="eyebrow">إدخال يدوي</span><h2>فاتورة بدون استيراد</h2></div>
+        </div>
+
+        <div class="panel">
+          <div class="form-grid">
+            <div class="field"><label for="invoiceType">فئة الفاتورة</label><select id="invoiceType"><option value="medicine">الأدوية</option><option value="general">قديم + مواد عامة</option></select></div>
+            <div class="field"><label for="invoiceNumber">رقم الفاتورة</label><input id="invoiceNumber" type="text" placeholder="رقم الفاتورة"></div>
+            <div class="field"><label for="invoiceDate">تاريخ الفاتورة</label><input id="invoiceDate" type="date"></div>
+            <div class="field"><label for="invoiceNotes">ملاحظات</label><input id="invoiceNotes" type="text" placeholder="اختياري"></div>
+          </div>
+        </div>
+        <div class="panel ocr-panel">
+          <div class="section-heading"><div><span class="eyebrow">التعرف الضوئي OCR</span><h2>قراءة الفاتورة بالكاميرا</h2><p>قراءة النصوص العربية والإنجليزية</p></div><span class="ocr-icon">⌁</span></div>
+          <input id="invoiceCameraInput" class="visually-hidden" type="file" accept="image/*" capture="environment" multiple>
+          <div class="camera-actions"><button id="openCameraBtn" class="primary-button" type="button">▣ تصوير الفاتورة</button><button id="chooseInvoiceImagesBtn" class="secondary-button" type="button">اختيار صور</button></div>
+          <div id="ocrImagePreview" class="ocr-image-preview" hidden><div class="subsection-heading"><h3>الصور المختارة</h3><button id="clearInvoiceImagesBtn" class="text-button" type="button">حذف الصور</button></div><div id="ocrImageList" class="ocr-image-list"></div></div>
+          <div class="ocr-info"><span>i</span><p>تتم قراءة الصور داخل المتصفح. اقتراح الكمية والسعر يعتمد على نمط الأرقام في السطر وقد يخطئ عند اختلاف ترتيب الأعمدة؛ لذلك يجب مراجعة كل صنف قبل الحفظ.</p></div>
+          <button id="runOcrBtn" class="primary-button full-button" type="button" disabled>استخراج بيانات الفاتورة</button>
+          <div id="ocrProgressArea" class="ocr-progress-area" hidden><div class="progress-heading"><span id="ocrStatusText">جارٍ تجهيز محرك القراءة...</span><strong id="ocrProgressPercent">0%</strong></div><div class="progress-track"><div id="ocrProgressBar" class="progress-fill"></div></div></div>
+          <div id="ocrError" class="message-box error-message" role="alert" hidden></div>
+        </div>
+        <div id="ocrReviewPanel" class="panel" hidden>
+          <div class="section-heading"><div><span class="eyebrow">مراجعة البيانات</span><h2>الأصناف المستخرجة</h2><p>صحح الاسم والكميات والأسعار قبل الإضافة</p></div></div>
+          <div class="ocr-review-summary"><span id="ocrDetectedCount">0 أصناف</span><span id="ocrReviewHint">النتائج تقديرية وتحتاج مراجعتك</span></div>
+          <div id="ocrReviewList" class="ocr-review-list"></div>
+          <div class="review-actions"><button id="addOcrItemsBtn" class="primary-button" type="button">إضافة الأصناف إلى الفاتورة</button><button id="discardOcrBtn" class="secondary-button" type="button">إلغاء المراجعة</button></div>
+          <details class="ocr-raw-details"><summary>عرض النص الخام المستخرج</summary><pre id="ocrRawText" class="ocr-raw-text"></pre></details>
+        </div>
+        <div class="panel">
+          <div class="subsection-heading"><div><h2>إضافة أو تصحيح صنف</h2><span class="muted-text">يمكنك إدخال الصنف يدوياً أو تصحيحه</span></div></div>
+          <div class="form-grid item-entry">
+            <div class="field field-wide"><label for="itemName">اسم الصنف</label><input id="itemName" type="text" placeholder="اسم الدواء أو المادة"></div>
+            <div class="field"><label for="itemPaidQty">الكمية المدفوعة</label><input id="itemPaidQty" type="number" min="1" step="1" inputmode="numeric" placeholder="0"></div>
+            <div class="field"><label for="itemBonusQty">كمية البونص</label><input id="itemBonusQty" type="number" min="0" step="1" inputmode="numeric" value="0"></div>
+            <div class="field"><label for="itemUnitPrice">سعر الوحدة</label><input id="itemUnitPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+          </div>
+          <button id="addItemBtn" class="secondary-button full-button" type="button">إضافة الصنف</button>
+        </div>
+        <div class="panel">
+          <div class="subsection-heading"><div><h2>أصناف الفاتورة</h2><span class="muted-text">القيمة تحسب من الكمية المدفوعة × سعر الوحدة</span></div><span id="invoiceItemCount" class="count-badge">0</span></div>
+          <div id="invoiceItemsList" class="invoice-items-list"><p class="empty-state">لم تتم إضافة أصناف بعد</p></div>
+          <div class="invoice-total"><span>إجمالي الفاتورة</span><strong id="invoiceTotal">0 د.ع</strong></div>
+          <button id="saveInvoiceBtn" class="primary-button full-button" type="button">حفظ الفاتورة</button>
+          <button id="resetInvoiceBtn" class="text-button full-button" type="button">تفريغ نموذج الفاتورة</button>
+        </div>
       </section>
 
       <section class="page-section" id="page-return" data-page-panel="return" hidden>
@@ -245,7 +246,7 @@
         <div class="field"><label for="paymentNotes">ملاحظات</label><input id="paymentNotes" type="text" placeholder="اختياري"></div>
         <div id="paymentPreviewMessage" class="info-strip">أدخل نسب الخصم والمبلغ لعرض توزيع التسديد</div>
         <button id="savePaymentBtn" class="primary-button full-button" type="button">تسجيل التسديد</button>
-        <p class="hint-text">يُطبق الخصم على رصيد الفئة قبل التسديد. في التسديد الجزئي يوزع المبلغ بعد الخصم بنسبة صافي مستحق كل فئة، ويُخصم أي رصيد دائن من الفئة الأخرى عند حساب صافي المورد، وتُحفظ تفاصيل الحساب في سجل العملية.</p></div>
+        <p class="hint-text">يُطبق الخصم مرة واحدة لكل فئة عند أول تسديد، ويُسجل ضمن تفاصيل العملية. بعد ذلك يبقى المستحق دون خصم إضافي.</p></div>
       </section>
 
       <section class="page-section" id="page-reports" data-page-panel="reports" hidden>
@@ -278,9 +279,9 @@
     <nav class="bottom-nav" aria-label="التنقل الرئيسي">
       <button class="nav-item" type="button" data-page="dashboard"><span class="nav-icon">⌂</span><small>الرئيسية</small></button>
       <button class="nav-item" type="button" data-page="invoice"><span class="nav-icon">＋</span><small>الفواتير</small></button>
-      <button class="nav-item" type="button" data-page="import"><span class="nav-icon">⇩</span><small>استيراد</small></button>
       <button class="nav-item" type="button" data-page="return"><span class="nav-icon">↩</span><small>المردود</small></button>
       <button class="nav-item" type="button" data-page="payment"><span class="nav-icon">د.ع</span><small>التسديد</small></button>
+      <button class="nav-item" type="button" data-page="reports"><span class="nav-icon">▤</span><small>التقارير</small></button>
       <button class="nav-item" type="button" data-page="archive"><span class="nav-icon">▤</span><small>الأرشيف</small></button>
       <button class="nav-item" type="button" data-page="settings"><span class="nav-icon">⚙</span><small>المزيد</small></button>
     </nav>
