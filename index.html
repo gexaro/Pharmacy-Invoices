@@ -44,6 +44,7 @@
           <div class="section-heading"><div><span class="eyebrow">إدارة الصيدلية</span><h2>الإجراءات السريعة</h2></div></div>
           <div class="actions-grid">
             <button class="action-card" type="button" data-page="invoice"><span class="action-icon">＋</span><strong>فاتورة جديدة</strong><small>تصوير وقراءة الفاتورة</small></button>
+            <button class="action-card" type="button" data-page="import"><span class="action-icon">⇩</span><strong>استيراد نص فاتورة</strong><small>لصق البيانات المستخرجة وتنظيمها</small></button>
             <button class="action-card" type="button" data-page="return"><span class="action-icon">↩</span><strong>مردود</strong><small>تسجيل مواد مرتجعة</small></button>
             <button class="action-card" type="button" data-page="payment"><span class="action-icon">د.ع</span><strong>تسديد</strong><small>إدارة حساب المورد</small></button>
             <button class="action-card" type="button" data-page="reports"><span class="action-icon">▤</span><strong>التقارير</strong><small>تحليل المشتريات</small></button>
@@ -95,6 +96,118 @@
           <div class="invoice-total"><span>إجمالي الفاتورة</span><strong id="invoiceTotal">0 د.ع</strong></div>
           <button id="saveInvoiceBtn" class="primary-button full-button" type="button">حفظ الفاتورة</button>
           <button id="resetInvoiceBtn" class="text-button full-button" type="button">تفريغ نموذج الفاتورة</button>
+        </div>
+      </section>
+
+      <!-- استيراد فاتورة من نص -->
+      <section class="page-section" id="page-import" data-page-panel="import" hidden>
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">استيراد ذكي</span>
+            <h1>استيراد فاتورة من نص</h1>
+            <p>الصق النص المستخرج وسيقوم التطبيق بتحليله وتنظيمه ومراجعته</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>النص المستخرج</h2>
+              <p>الصق النص الكامل الذي يبدأ بـ PHARMACY_INVOICE_DATA_V1</p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="invoiceImportText">بيانات الفاتورة</label>
+            <textarea id="invoiceImportText" rows="12" dir="auto" placeholder="PHARMACY_INVOICE_DATA_V1&#10;&#10;[INVOICE]&#10;..."></textarea>
+          </div>
+          <div class="import-input-actions">
+            <button id="parseInvoiceTextBtn" class="primary-button full-button" type="button">تحليل وتنظيم البيانات</button>
+            <button id="clearInvoiceTextBtn" class="text-button full-button" type="button">مسح النص</button>
+          </div>
+          <div id="invoiceImportError" class="message-box error-message" role="alert" hidden></div>
+        </div>
+
+        <div id="invoiceImportReview" hidden>
+          <div class="panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">بيانات الفاتورة</span>
+                <h2>مراجعة رأس الفاتورة</h2>
+              </div>
+              <span id="importInvoiceStatus" class="count-badge">مراجعة</span>
+            </div>
+            <div class="form-grid">
+              <div class="field">
+                <label for="importSupplier">المورد</label>
+                <input id="importSupplier" type="text">
+              </div>
+              <div class="field">
+                <label for="importCustomer">العميل</label>
+                <input id="importCustomer" type="text">
+              </div>
+              <div class="field">
+                <label for="importInvoiceNumber">رقم الفاتورة</label>
+                <input id="importInvoiceNumber" type="text">
+              </div>
+              <div class="field">
+                <label for="importInvoiceDate">تاريخ الفاتورة</label>
+                <input id="importInvoiceDate" type="date">
+              </div>
+              <div class="field">
+                <label for="importRepresentative">المندوب</label>
+                <input id="importRepresentative" type="text">
+              </div>
+              <div class="field">
+                <label for="importRepresentativePhone">هاتف المندوب</label>
+                <input id="importRepresentativePhone" type="text">
+              </div>
+              <div class="field">
+                <label for="importInvoiceType">نوع الفاتورة</label>
+                <input id="importInvoiceType" type="text">
+              </div>
+              <div class="field">
+                <label for="importPrintedTotal">الإجمالي المطبوع</label>
+                <input id="importPrintedTotal" type="number" min="0" step="any">
+              </div>
+            </div>
+            <div id="importHeaderWarnings" class="info-strip" hidden></div>
+          </div>
+
+          <div class="panel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">مراجعة الأصناف</span>
+                <h2>الأصناف المنظمة</h2>
+                <p>يمكن تعديل الاسم والفئة والكمية والسعر قبل الحفظ</p>
+              </div>
+              <span id="importItemCount" class="count-badge">0</span>
+            </div>
+            <div id="importItemsReview" class="import-items-review"></div>
+          </div>
+
+          <div class="panel">
+            <h2>نتيجة التدقيق الحسابي</h2>
+            <div class="balance-row"><span>عدد الأصناف</span><strong id="importSummaryItems">0</strong></div>
+            <div class="balance-row"><span>إجمالي الكمية المدفوعة</span><strong id="importSummaryPaid">0</strong></div>
+            <div class="balance-row"><span>إجمالي البونص</span><strong id="importSummaryBonus">0</strong></div>
+            <div class="balance-row"><span>إجمالي الكمية المستلمة</span><strong id="importSummaryReceived">0</strong></div>
+            <div class="balance-row"><span>مجموع قيم الأصناف المحسوب</span><strong id="importSummaryCalculated">0 د.ع</strong></div>
+            <div class="balance-row"><span>الإجمالي المطبوع</span><strong id="importSummaryPrinted">غير متوفر</strong></div>
+            <div class="balance-row total-row"><span>الفرق</span><strong id="importSummaryDifference">غير قابل للتحقق</strong></div>
+            <div id="importValidationMessages" class="import-validation-messages"></div>
+            <label class="import-confirm-row" id="importMismatchConfirmRow" hidden>
+              <input id="importConfirmMismatch" type="checkbox">
+              <span>راجعت الفرق وأوافق على حفظ الفاتورة رغم عدم تطابق الإجمالي.</span>
+            </label>
+            <label class="import-confirm-row" id="importDuplicateConfirmRow" hidden>
+              <input id="importConfirmDuplicate" type="checkbox">
+              <span>تحققت من الفاتورة المتشابهة وأؤكد أن هذه فاتورة مستقلة وليست نسخة مكررة.</span>
+            </label>
+            <div class="review-actions">
+              <button id="saveImportedInvoiceBtn" class="primary-button" type="button" disabled>حفظ الفاتورة في الحسابات</button>
+              <button id="cancelInvoiceImportBtn" class="secondary-button" type="button">إلغاء المراجعة</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -158,13 +271,16 @@
     <nav class="bottom-nav" aria-label="التنقل الرئيسي">
       <button class="nav-item" type="button" data-page="dashboard"><span class="nav-icon">⌂</span><small>الرئيسية</small></button>
       <button class="nav-item" type="button" data-page="invoice"><span class="nav-icon">＋</span><small>الفواتير</small></button>
+      <button class="nav-item" type="button" data-page="import"><span class="nav-icon">⇩</span><small>استيراد</small></button>
       <button class="nav-item" type="button" data-page="return"><span class="nav-icon">↩</span><small>المردود</small></button>
       <button class="nav-item" type="button" data-page="payment"><span class="nav-icon">د.ع</span><small>التسديد</small></button>
       <button class="nav-item" type="button" data-page="archive"><span class="nav-icon">▤</span><small>الأرشيف</small></button>
       <button class="nav-item" type="button" data-page="settings"><span class="nav-icon">⚙</span><small>المزيد</small></button>
     </nav>
   </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script src="db.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
   <script src="ocr.js" defer></script>
@@ -172,6 +288,7 @@
   <script src="returns.js" defer></script>
   <script src="payments.js" defer></script>
   <script src="reports.js" defer></script>
+  <script src="import.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
