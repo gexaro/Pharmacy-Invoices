@@ -1,4 +1,3 @@
-
 (function () {
   'use strict';
 
@@ -44,6 +43,21 @@
       date.getMonth() === month - 1 &&
       date.getDate() === day
     );
+  }
+
+  function validAmount(value) {
+    if (value === null || value === undefined || String(value).trim() === '') {
+      return null;
+    }
+
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+
+    const rounded = round(amount);
+    return Number.isFinite(rounded) &&
+      Number.isSafeInteger(Math.round(rounded * 100))
+      ? rounded
+      : null;
   }
 
   async function getInvoices() {
@@ -95,7 +109,6 @@
       round(categoryPurchased - categoryReturned)
     );
 
-    // عند عدم اختيار فاتورة: الحد الإجمالي للفئة.
     if (!invoiceId) {
       return categoryCapacity;
     }
@@ -125,7 +138,6 @@
       round(Number(selectedInvoice.total || 0) - invoiceReturned)
     );
 
-    // نلتزم بالحد الأصغر: المتبقي من الفاتورة أو من الفئة كلها.
     return Math.min(invoiceCapacity, categoryCapacity);
   }
 
@@ -181,11 +193,7 @@
     try {
       const category = $('returnType')?.value;
       const invoiceId = $('returnInvoice')?.value || null;
-
-      const capacity = await calculateCapacity(
-        category,
-        invoiceId
-      );
+      const capacity = await calculateCapacity(category, invoiceId);
 
       info.textContent =
         'الحد المتاح للمردود في ' +
@@ -200,12 +208,9 @@
   async function saveReturn() {
     const category = $('returnType')?.value;
     const date = $('returnDate')?.value;
-    const amount = round(Number($('returnAmount')?.value));
+    const amount = validAmount($('returnAmount')?.value);
     const invoiceValue = $('returnInvoice')?.value || '';
-
-    const invoiceId = invoiceValue
-      ? Number(invoiceValue)
-      : null;
+    const invoiceId = invoiceValue ? Number(invoiceValue) : null;
 
     if (!['medicine', 'general'].includes(category)) {
       toast('اختر فئة المردود.');
@@ -217,8 +222,8 @@
       return;
     }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast('أدخل قيمة مردود صحيحة أكبر من صفر.');
+    if (amount === null) {
+      toast('أدخل قيمة مردود صحيحة أكبر من صفر وبحد أقصى منزلتين عشريتين.');
       return;
     }
 
@@ -231,15 +236,11 @@
     }
 
     const button = $('saveReturnBtn');
-
     if (button?.disabled) return;
     if (button) button.disabled = true;
 
     try {
-      const capacity = await calculateCapacity(
-        category,
-        invoiceId
-      );
+      const capacity = await calculateCapacity(category, invoiceId);
 
       if (amount > capacity) {
         toast(
@@ -255,26 +256,16 @@
         month: date.slice(0, 7),
         invoiceId,
         amount,
-        number: String(
-          $('returnNumber')?.value || ''
-        ).trim(),
-        notes: String(
-          $('returnNotes')?.value || ''
-        ).trim(),
+        number: String($('returnNumber')?.value || '').trim(),
+        notes: String($('returnNotes')?.value || '').trim(),
         createdAt: new Date().toISOString()
       };
 
       await window.PharmacyDB.add('returns', record);
 
-      $('returnAmount').value = '';
-
-      if ($('returnNumber')) {
-        $('returnNumber').value = '';
-      }
-
-      if ($('returnNotes')) {
-        $('returnNotes').value = '';
-      }
+      if ($('returnAmount')) $('returnAmount').value = '';
+      if ($('returnNumber')) $('returnNumber').value = '';
+      if ($('returnNotes')) $('returnNotes').value = '';
 
       toast('تم تسجيل المردود بنجاح.');
 
@@ -285,7 +276,6 @@
       );
 
       await updateCapacity();
-
     } catch (error) {
       toast(error.message || 'تعذر تسجيل المردود.');
     } finally {
@@ -300,20 +290,9 @@
       $('returnDate').value = today();
     }
 
-    $('returnType')?.addEventListener(
-      'change',
-      renderInvoices
-    );
-
-    $('returnInvoice')?.addEventListener(
-      'change',
-      updateCapacity
-    );
-
-    $('saveReturnBtn')?.addEventListener(
-      'click',
-      saveReturn
-    );
+    $('returnType')?.addEventListener('change', renderInvoices);
+    $('returnInvoice')?.addEventListener('change', updateCapacity);
+    $('saveReturnBtn')?.addEventListener('click', saveReturn);
 
     renderInvoices();
   }
@@ -325,11 +304,7 @@
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      init,
-      { once: true }
-    );
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
