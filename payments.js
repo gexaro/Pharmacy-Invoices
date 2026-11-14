@@ -46,9 +46,17 @@
     return Math.max(0, Number(payment.discountAmounts?.[category]) || 0);
   }
 
+  // نسبة الخصم التي كانت مسجلة وقت التسديد (للسجلات القديمة).
+  function discountRate(payment, category) {
+    const value =
+      payment.discountSnapshot?.[category] ??
+      payment.discounts?.[category];
+
+    return Math.max(0, Number(value) || 0);
+  }
+
   // هل استُهلك خصم الفئة في تسديد سابق؟
-  // السجلات الجديدة تحمل discountGranted، أما القديمة فتُعامل كاستهلاك
-  // إذا كان لها توزيع أو خصم على الفئة.
+  // الخصم يُعتبر مستهلكاً فقط إذا طُبق فعلاً، وليس إذا كانت نسبته صفراً.
   function discountAlreadyGranted(payments, category) {
     return payments.some(payment => {
       if (
@@ -58,9 +66,13 @@
         return payment.discountGranted[category] === true;
       }
 
+      // سجل قديم بدون علامة discountGranted.
       return (
-        allocationAmount(payment.allocations?.[category]) > 0 ||
-        discountRecorded(payment, category) > 0
+        discountRecorded(payment, category) > 0 ||
+        (
+          allocationAmount(payment.allocations?.[category]) > 0 &&
+          discountRate(payment, category) > 0
+        )
       );
     });
   }
@@ -168,8 +180,8 @@
     };
   }
 
-  // الخصم يُحسب مرة واحدة فقط لكل فئة، على الرصيد الموجود عند أول تسديد.
-  // بعد ذلك يبقى المستحق كما هو دون خصم إضافي.
+  // الخصم يُحسب مرة واحدة فقط لكل فئة، على الرصيد الموجود عند أول تسديد
+  // تُطبق نسبته فعلاً (أكبر من صفر). بعد ذلك يبقى المستحق دون خصم إضافي.
   async function calculateState() {
     const [balances, discounts, payments] = await Promise.all([
       getBalances(),
@@ -188,7 +200,9 @@
       granted[category] = discountAlreadyGranted(payments, category);
 
       grantsNow[category] =
-        !granted[category] && adjusted[category] > 0;
+        !granted[category] &&
+        discounts[category] > 0 &&
+        adjusted[category] > 0;
 
       discountNow[category] = grantsNow[category]
         ? round(adjusted[category] * discounts[category] / 100)
