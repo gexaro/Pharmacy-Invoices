@@ -268,11 +268,20 @@
       </section>
 
       <section class="page-section" id="page-settings" data-page-panel="settings" hidden>
-        <div class="section-heading"><div><span class="eyebrow">إدارة البيانات</span><h1>الإعدادات والنسخ الاحتياطي</h1><p>إعدادات المورد وحماية بياناتك</p></div></div>
+        <div class="section-heading"><div><span class="eyebrow">إدارة البيانات</span><h1>المزيد</h1><p>الأرشيف والإعدادات وحماية بياناتك</p></div></div>
+
+        <div class="panel">
+          <h2>الأرشيف</h2>
+          <p class="hint-text">عرض جميع الفواتير والمردودات والتسديدات مع إمكانية البحث.</p>
+          <button class="secondary-button full-button" type="button" data-page="archive">فتح الأرشيف</button>
+        </div>
+
         <div class="panel"><h2>بيانات المورد</h2><div class="field"><label for="supplierName">اسم المورد</label><input id="supplierName" type="text" placeholder="اسم المورد"></div><button id="saveSettingsBtn" class="secondary-button full-button" type="button">حفظ الإعدادات</button>
           <div class="divider"></div><h2>النسخ الاحتياطي</h2><p class="hint-text">أنشئ نسخة احتياطية دورياً. البيانات محفوظة محلياً في هذا المتصفح، ولا تُرفع إلى خادم.</p><button id="backupBtn" class="primary-button full-button" type="button">تصدير نسخة احتياطية JSON</button><div class="field"><label for="restoreFile">ملف النسخة الاحتياطية</label><input id="restoreFile" type="file" accept=".json,application/json"></div><button id="restoreBtn" class="secondary-button full-button" type="button">استعادة النسخة الاحتياطية</button>
           <div class="divider"></div><button id="clearDataBtn" class="danger-button full-button" type="button">حذف جميع البيانات</button>
-        </div><div class="panel about-panel"><span class="eyebrow">PHARMACY INVOICES</span><h2>إدارة مشترياتك بوضوح</h2><p>نظام محلي لإدارة الفواتير والحسابات والتقارير.</p><span class="version-label">Version 1.0</span></div>
+        </div>
+
+        <div class="panel about-panel"><span class="eyebrow">PHARMACY INVOICES</span><h2>إدارة مشترياتك بوضوح</h2><p>نظام محلي لإدارة الفواتير والحسابات والتقارير.</p><span class="version-label">Version 1.0</span></div>
       </section>
     </main>
 
@@ -282,8 +291,7 @@
       <button class="nav-item" type="button" data-page="return"><span class="nav-icon">↩</span><small>المردود</small></button>
       <button class="nav-item" type="button" data-page="payment"><span class="nav-icon">د.ع</span><small>التسديد</small></button>
       <button class="nav-item" type="button" data-page="reports"><span class="nav-icon">▤</span><small>التقارير</small></button>
-      <button class="nav-item" type="button" data-page="archive"><span class="nav-icon">▤</span><small>الأرشيف</small></button>
-      <button class="nav-item" type="button" data-page="settings"><span class="nav-icon">⚙</span><small>المزيد</small></button>
+      <button class="nav-item" type="button" data-page="settings"><span class="nav-icon">⋯</span><small>المزيد</small></button>
     </nav>
   </div>
 
