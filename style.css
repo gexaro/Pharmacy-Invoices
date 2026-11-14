@@ -537,20 +537,88 @@ button:disabled {
   border: 0 !important;
 }
 
+/* OCR PAGE SELECTION */
+
+.ocr-image-preview {
+  margin-top: 17px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb,var(--accent) 5%,var(--surface-solid));
+}
+
+.ocr-image-preview .subsection-heading {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
 .ocr-image-list {
   display: flex;
-  gap: 9px;
+  gap: 11px;
   overflow-x: auto;
-  padding: 5px 0;
+  padding: 5px 2px 9px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ocr-page-card {
+  flex: 0 0 112px;
+  min-width: 112px;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  scroll-snap-align: start;
 }
 
 .ocr-thumb {
-  width: 88px;
-  height: 88px;
-  flex: 0 0 88px;
+  display: block;
+  width: 96px;
+  height: 112px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 9px;
   border: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.ocr-page-label {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ocr-page-controls {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.ocr-page-action {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ocr-page-action:disabled {
+  opacity: .28;
+}
+
+.ocr-page-action.remove-page {
+  color: var(--danger);
+  font-size: 18px;
 }
 
 .ocr-progress-area {
@@ -560,6 +628,7 @@ button:disabled {
 .progress-heading {
   display: flex;
   justify-content: space-between;
+  gap: 10px;
   font-size: 11px;
   color: var(--muted);
   margin-bottom: 8px;
@@ -584,6 +653,7 @@ button:disabled {
   padding: 12px;
   border-radius: 12px;
   font-size: 12px;
+  line-height: 1.8;
   margin-top: 12px;
 }
 
@@ -598,7 +668,9 @@ button:disabled {
   gap: 8px;
   color: var(--muted);
   font-size: 11px;
+  line-height: 1.8;
   margin-bottom: 12px;
+  overflow-wrap: anywhere;
 }
 
 .ocr-review-list,
@@ -659,22 +731,41 @@ button:disabled {
   padding: 2px 7px;
 }
 
+.ocr-row-warning {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: color-mix(in srgb,var(--danger) 10%,var(--surface-solid));
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
 .ocr-raw-details {
   margin-top: 15px;
   color: var(--muted);
   font-size: 12px;
 }
 
+.ocr-raw-details summary {
+  padding: 8px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .ocr-raw-text {
   max-height: 240px;
   overflow: auto;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   direction: auto;
   text-align: left;
   padding: 12px;
   background: var(--bg);
+  border: 1px solid var(--line);
   border-radius: 10px;
   font-size: 11px;
+  line-height: 1.8;
 }
 
 /* INVOICE ITEMS */
@@ -988,6 +1079,20 @@ button:disabled {
   .welcome-section h1,
   .section-heading h1 {
     font-size: 22px;
+  }
+
+  .ocr-page-card {
+    flex-basis: 104px;
+    min-width: 104px;
+  }
+
+  .ocr-thumb {
+    width: 88px;
+    height: 104px;
+  }
+
+  .ocr-review-summary {
+    flex-direction: column;
   }
 }
 
