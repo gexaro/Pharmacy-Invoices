@@ -951,7 +951,7 @@ button:disabled {
   min-height: calc(68px + var(--safe-bottom));
   padding: 7px 7px calc(7px + var(--safe-bottom));
   display: grid;
-  grid-template-columns: repeat(6,minmax(0,1fr));
+  grid-template-columns: repeat(7,minmax(0,1fr));
   gap: 2px;
   background: color-mix(in srgb,var(--surface-solid) 92%,transparent);
   border-top: 1px solid var(--line);
@@ -1103,5 +1103,75 @@ button:disabled {
     scroll-behavior: auto !important;
     animation-duration: .01ms !important;
     transition-duration: .01ms !important;
+  }
+}
+/* IMPORT PAGE */
+
+.import-input-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 4px;
+}
+
+.import-items-review {
+  display: grid;
+  gap: 12px;
+}
+
+.import-item-card {
+  display: grid;
+  gap: 4px;
+}
+
+.import-item-card .form-grid {
+  margin-top: 6px;
+}
+
+.import-item-card .hint-text {
+  margin-top: 6px;
+}
+
+.import-validation-messages {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.import-validation-messages .message-box,
+.import-validation-messages .info-strip {
+  margin: 0;
+}
+
+.import-confirm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: color-mix(in srgb,var(--accent) 8%,var(--surface-solid));
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.import-confirm-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  accent-color: var(--primary);
+}
+
+.import-item-card .message-box {
+  margin-top: 8px;
+}
+
+@media (min-width:650px) {
+  .import-input-actions {
+    grid-template-columns: 1fr 1fr;
   }
 }
