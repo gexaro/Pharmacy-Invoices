@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'pharmacy-invoices-v5';
+const CACHE_NAME = 'pharmacy-invoices-v6';
 
 const CORE_FILES = [
   './index.html',
