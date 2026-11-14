@@ -31,12 +31,8 @@
 
   function normalizeDigits(value) {
     return String(value || '')
-      .replace(/[٠-٩]/g, digit =>
-        String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
-      )
-      .replace(/[۰-۹]/g, digit =>
-        String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
-      );
+      .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+      .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
   }
 
   function normalizeName(value) {
@@ -54,24 +50,27 @@
       .replace(/[٬،,'’‘٫]/g, '')
       .replace(/[^\d.-]/g, '');
 
-    if (!normalized || !/\d/.test(normalized)) {
-      return null;
-    }
+    if (!normalized || !/\d/.test(normalized)) return null;
 
     const number = Number(normalized);
 
-    return Number.isSafeInteger(number) && number >= 0
+    return Number.isFinite(number) &&
+      Number.isSafeInteger(Math.round(number * 100)) &&
+      number >= 0
       ? number
       : null;
   }
 
-  function extractNumbers(value) {
+  function extractNumberTokens(value) {
     const matches = normalizeDigits(value)
       .match(/\d[\d,٬.'’٫]*\d|\d/g) || [];
 
     return matches
-      .map(parseNumber)
-      .filter(number => number !== null);
+      .map(token => ({
+        text: token,
+        value: parseNumber(token)
+      }))
+      .filter(item => item.value !== null);
   }
 
   function setProgress(percent, status) {
@@ -83,8 +82,7 @@
     if (area) area.hidden = false;
 
     if (bar) {
-      bar.style.width =
-        Math.max(0, Math.min(100, percent)) + '%';
+      bar.style.width = Math.max(0, Math.min(100, percent)) + '%';
     }
 
     if (percentText) {
@@ -135,7 +133,6 @@
 
   async function prepareImage(file) {
     const image = await loadImage(file);
-
     const originalWidth = image.naturalWidth;
     const originalHeight = image.naturalHeight;
 
@@ -143,12 +140,7 @@
       throw new Error('أبعاد إحدى الصور غير صالحة.');
     }
 
-    // تكبير الصورة قليلاً لتحسين قراءة النصوص الصغيرة.
-    const scale = Math.min(
-      1.7,
-      Math.max(1, 2200 / originalWidth)
-    );
-
+    const scale = Math.min(1.7, Math.max(1, 2200 / originalWidth));
     const canvas = document.createElement('canvas');
 
     canvas.width = Math.round(originalWidth * scale);
@@ -164,23 +156,9 @@
 
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-    context.drawImage(
-      image,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    // تحويل إلى تدرج رمادي وتحسين التباين.
-    const pixels = context.getImageData(
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
     const data = pixels.data;
     const contrast = 1.22;
 
@@ -190,12 +168,9 @@
         0.587 * data[i + 1] +
         0.114 * data[i + 2];
 
-      let adjusted =
-        (gray - 128) * contrast + 128;
-
-      adjusted = Math.max(
+      const adjusted = Math.max(
         0,
-        Math.min(255, adjusted)
+        Math.min(255, (gray - 128) * contrast + 128)
       );
 
       data[i] = adjusted;
@@ -231,7 +206,6 @@
 
       const url = URL.createObjectURL(file);
       image.src = url;
-
       image.onload = () => URL.revokeObjectURL(url);
       image.onerror = () => URL.revokeObjectURL(url);
 
@@ -252,13 +226,8 @@
       up.addEventListener('click', () => {
         if (index === 0) return;
 
-        [
-          selectedFiles[index - 1],
-          selectedFiles[index]
-        ] = [
-          selectedFiles[index],
-          selectedFiles[index - 1]
-        ];
+        [selectedFiles[index - 1], selectedFiles[index]] =
+          [selectedFiles[index], selectedFiles[index - 1]];
 
         resetResults();
         renderSelectedImages();
@@ -274,13 +243,8 @@
       down.addEventListener('click', () => {
         if (index >= selectedFiles.length - 1) return;
 
-        [
-          selectedFiles[index],
-          selectedFiles[index + 1]
-        ] = [
-          selectedFiles[index + 1],
-          selectedFiles[index]
-        ];
+        [selectedFiles[index], selectedFiles[index + 1]] =
+          [selectedFiles[index + 1], selectedFiles[index]];
 
         resetResults();
         renderSelectedImages();
@@ -304,9 +268,7 @@
     });
 
     preview.hidden = selectedFiles.length === 0;
-
-    runButton.disabled =
-      selectedFiles.length === 0;
+    runButton.disabled = selectedFiles.length === 0;
   }
 
   function resetResults() {
@@ -316,44 +278,28 @@
     invoiceMismatch = false;
     reviewWarnings = [];
 
-    if ($('ocrReviewPanel')) {
-      $('ocrReviewPanel').hidden = true;
-    }
-
-    if ($('ocrProgressArea')) {
-      $('ocrProgressArea').hidden = true;
-    }
+    if ($('ocrReviewPanel')) $('ocrReviewPanel').hidden = true;
+    if ($('ocrProgressArea')) $('ocrProgressArea').hidden = true;
 
     clearError();
   }
 
   function parseTSV(tsv, width, height) {
-    if (!tsv || typeof tsv !== 'string') {
-      return [];
-    }
+    if (!tsv || typeof tsv !== 'string') return [];
 
     const lines = tsv.trim().split(/\r?\n/);
-
     if (lines.length < 2) return [];
 
     const headers = lines[0].split('\t');
-
     const index = {};
+
     headers.forEach((header, i) => {
       index[header.trim()] = i;
     });
 
     const required = [
-      'level',
-      'block_num',
-      'par_num',
-      'line_num',
-      'left',
-      'top',
-      'width',
-      'height',
-      'conf',
-      'text'
+      'level', 'block_num', 'par_num', 'line_num',
+      'left', 'top', 'width', 'height', 'conf', 'text'
     ];
 
     if (!required.every(key => index[key] !== undefined)) {
@@ -365,22 +311,22 @@
     for (let i = 1; i < lines.length; i += 1) {
       const parts = lines[i].split('\t');
 
-      if (Number(parts[index.level]) !== 5) {
-        continue;
-      }
+      if (Number(parts[index.level]) !== 5) continue;
 
       const text = String(parts[index.text] || '').trim();
-
       if (!text) continue;
 
       const left = Number(parts[index.left]);
       const top = Number(parts[index.top]);
       const wordWidth = Number(parts[index.width]);
       const wordHeight = Number(parts[index.height]);
+      const confidence = Number(parts[index.conf]);
 
       if (
         !Number.isFinite(left) ||
         !Number.isFinite(top) ||
+        !Number.isFinite(wordWidth) ||
+        !Number.isFinite(wordHeight) ||
         wordWidth <= 0 ||
         wordHeight <= 0
       ) {
@@ -395,7 +341,7 @@
         height: wordHeight,
         centerX: (left + wordWidth / 2) / width,
         centerY: (top + wordHeight / 2) / height,
-        confidence: Number(parts[index.conf]) || 0,
+        confidence: Number.isFinite(confidence) ? confidence : 0,
         block: parts[index.block_num],
         paragraph: parts[index.par_num],
         line: parts[index.line_num]
@@ -409,16 +355,9 @@
     const groups = new Map();
 
     words.forEach(word => {
-      const key = [
-        word.block,
-        word.paragraph,
-        word.line
-      ].join('-');
+      const key = [word.block, word.paragraph, word.line].join('-');
 
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-
+      if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(word);
     });
 
@@ -426,106 +365,110 @@
       .map(group => {
         group.sort((a, b) => a.left - b.left);
 
-        const top = Math.min(
-          ...group.map(word => word.top)
-        );
-
-        const bottom = Math.max(
-          ...group.map(word => word.top + word.height)
-        );
+        const top = Math.min(...group.map(word => word.top));
+        const bottom = Math.max(...group.map(word => word.top + word.height));
 
         return {
           words: group,
           top,
           bottom,
           centerY: (top + bottom) / 2,
-          text: group.map(word => word.text).join(' ')
+          text: group.map(word => word.text).join(' '),
+          averageConfidence: group.reduce(
+            (sum, word) => sum + word.confidence,
+            0
+          ) / group.length
         };
       })
       .sort((a, b) => a.centerY - b.centerY);
   }
 
   function extractInvoiceNumber(lines) {
-    const headerLines = lines.filter(line =>
-      line.centerY < 0.27
-    );
+    const candidates = [];
 
-    let best = null;
-    let bestScore = 0;
-
-    headerLines.forEach(line => {
+    lines.filter(line => line.centerY < 0.27).forEach(line => {
       const text = normalizeDigits(line.text);
 
-      const hasInvoiceLabel =
-        /فاتور|رقم|invoice|inv\b/i.test(text);
+      if (!/فاتور|رقم|invoice|inv\b/i.test(text)) return;
 
-      if (!hasInvoiceLabel) return;
+      const tokens = extractNumberTokens(text)
+        .filter(item => {
+          const digits = String(Math.trunc(item.value));
+          return digits.length >= 5 &&
+            digits.length <= 10 &&
+            !digits.startsWith('202');
+        });
 
-      const numbers = extractNumbers(text)
-        .filter(number =>
-          String(number).length >= 5 &&
-          String(number).length <= 10 &&
-          !String(number).startsWith('202')
-        );
-
-      numbers.forEach(number => {
-        const score =
-          /فاتور/i.test(text) ? 3 : 2;
-
-        if (score > bestScore) {
-          best = String(number);
-          bestScore = score;
-        }
+      tokens.forEach(token => {
+        candidates.push({
+          value: String(Math.trunc(token.value)),
+          confidence: line.averageConfidence || 0,
+          hasInvoiceWord: /فاتور|invoice|inv\b/i.test(text)
+        });
       });
     });
 
-    return best;
+    const unique = [...new Set(candidates.map(item => item.value))];
+
+    // إذا ظهر أكثر من رقم محتمل، لا نخمن رقم الفاتورة.
+    if (unique.length !== 1) return null;
+
+    const selected = candidates.find(item => item.value === unique[0]);
+
+    if (!selected || selected.confidence < 35) return null;
+
+    return selected.value;
   }
 
   function extractPrintedTotal(lines, imageHeight) {
-    const footerLines = lines.filter(line =>
-      line.centerY > 0.58
-    );
+    const candidates = [];
 
-    let best = null;
-    let bestScore = 0;
-
-    footerLines.forEach(line => {
+    lines.filter(line => line.centerY > 0.58).forEach(line => {
       const text = line.text;
 
-      if (!/اجمال|إجمال|المجموع|total/i.test(text)) {
+      if (!/اجمال|إجمال|المجموع|total/i.test(text)) return;
+
+      const numericWords = line.words.filter(word => {
+        return parseNumber(word.text) !== null &&
+          word.confidence >= 30;
+      });
+
+      // الإجمالي غالباً يقع ضمن عمود القيمة.
+      const columnCandidates = numericWords.filter(word =>
+        word.centerX >= COLUMNS.value[0] - 0.025 &&
+        word.centerX <= COLUMNS.value[1] + 0.04
+      );
+
+      let selected = null;
+
+      if (columnCandidates.length === 1) {
+        selected = columnCandidates[0];
+      } else if (columnCandidates.length > 1) {
+        // عند تعدد الأرقام في عمود القيمة لا نختار عشوائياً.
+        return;
+      } else if (numericWords.length === 1) {
+        selected = numericWords[0];
+      } else {
         return;
       }
 
-      const numbers = extractNumbers(text);
+      const value = parseNumber(selected.text);
 
-      if (!numbers.length) return;
-
-      const value = Math.max(...numbers);
-
-      if (value <= 0) return;
-
-      const score =
-        /اجمال|إجمال/i.test(text) ? 3 : 2;
-
-      if (score > bestScore) {
-        best = value;
-        bestScore = score;
+      if (value !== null && value > 0) {
+        candidates.push(value);
       }
     });
 
-    return best;
+    const unique = [...new Set(candidates)];
+
+    return unique.length === 1 ? unique[0] : null;
   }
 
   function findTableBounds(lines, imageHeight) {
     const header = lines.find(line => {
-      if (line.centerY > imageHeight * 0.55) {
-        return false;
-      }
+      if (line.centerY > imageHeight * 0.55) return false;
 
-      return (
-        /المادة|الكمية|السعر|القيمة/.test(line.text)
-      );
+      return /المادة|الكمية|السعر|القيمة/.test(line.text);
     });
 
     const headerBottom = header
@@ -560,25 +503,16 @@
     filtered.forEach(word => {
       let row = rows[rows.length - 1];
 
-      if (
-        !row ||
-        Math.abs(row.centerY - word.centerY) > tolerance
-      ) {
-        row = {
-          words: [],
-          centerY: word.centerY
-        };
-
+      if (!row || Math.abs(row.centerY - word.centerY) > tolerance) {
+        row = { words: [], centerY: word.centerY };
         rows.push(row);
       }
 
       row.words.push(word);
-
-      row.centerY =
-        row.words.reduce(
-          (sum, item) => sum + item.centerY,
-          0
-        ) / row.words.length;
+      row.centerY = row.words.reduce(
+        (sum, item) => sum + item.centerY,
+        0
+      ) / row.words.length;
     });
 
     return rows;
@@ -588,20 +522,14 @@
     const [min, max] = COLUMNS[column];
 
     return words
-      .filter(word =>
-        word.centerX >= min &&
-        word.centerX < max
-      )
+      .filter(word => word.centerX >= min && word.centerX < max)
       .sort((a, b) => a.left - b.left);
   }
 
   function readCell(words) {
     if (!words.length) return null;
 
-    const combined = words
-      .map(word => word.text)
-      .join('');
-
+    const combined = words.map(word => word.text).join('');
     const direct = parseNumber(combined);
 
     if (direct !== null) return direct;
@@ -618,9 +546,7 @@
   }
 
   function cleanItemName(words) {
-    return words
-      .map(word => word.text)
-      .join(' ')
+    return words.map(word => word.text).join(' ')
       .replace(/[|:؛،]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -628,58 +554,54 @@
 
   function extractPageItems(words, lines, imageHeight, pageNumber) {
     const bounds = findTableBounds(lines, imageHeight);
-
-    const rows = groupIntoRows(
-      words,
-      imageHeight,
-      bounds
-    );
-
+    const rows = groupIntoRows(words, imageHeight, bounds);
     const items = [];
     const unresolved = [];
 
     rows.forEach((row, index) => {
-      const nameWords = wordsInColumn(
-        row.words,
-        'name'
-      );
-
-      const quantityWords = wordsInColumn(
-        row.words,
-        'quantity'
-      );
-
-      const priceWords = wordsInColumn(
-        row.words,
-        'price'
-      );
-
-      const valueWords = wordsInColumn(
-        row.words,
-        'value'
-      );
+      const nameWords = wordsInColumn(row.words, 'name');
+      const quantityWords = wordsInColumn(row.words, 'quantity');
+      const priceWords = wordsInColumn(row.words, 'price');
+      const valueWords = wordsInColumn(row.words, 'value');
 
       const name = cleanItemName(nameWords);
       const paidQty = readCell(quantityWords);
       const unitPrice = readCell(priceWords);
       const printedValue = readCell(valueWords);
 
+      const rowConfidence = row.words.reduce(
+        (sum, word) => sum + word.confidence,
+        0
+      ) / Math.max(1, row.words.length);
+
       if (
         !name ||
         name.length < 2 ||
         !Number.isSafeInteger(paidQty) ||
         paidQty <= 0 ||
-        !Number.isSafeInteger(unitPrice) ||
+        unitPrice === null ||
+        !Number.isFinite(unitPrice) ||
         unitPrice < 0
       ) {
         if (name || quantityWords.length || priceWords.length) {
           unresolved.push({
             page: pageNumber,
             row: index + 1,
-            text: row.words.map(word => word.text).join(' ')
+            text: row.words.map(word => word.text).join(' '),
+            reason: 'بيانات الصنف أو الكمية أو السعر غير مكتملة'
           });
         }
 
+        return;
+      }
+
+      if (rowConfidence < 35) {
+        unresolved.push({
+          page: pageNumber,
+          row: index + 1,
+          text: row.words.map(word => word.text).join(' '),
+          reason: 'ثقة القراءة منخفضة'
+        });
         return;
       }
 
@@ -703,21 +625,24 @@
 
       const previous = items[items.length - 1];
 
-      // الخلية الفارغة في عمود القيمة تعني بونص،
-      // بشرط تطابق اسم المادة مع الصف السابق.
+      // لا نضيف البونص تلقائياً إلا إذا تطابق الاسم
+      // وكانت خلية القيمة والسعر فارغتين في صف البونص.
       if (printedValue === null) {
-        if (
-          previous &&
-          previous.normalizedName === item.normalizedName
-        ) {
+        const hasNoPrice = priceWords.length === 0;
+        const sameName = previous &&
+          previous.normalizedName === item.normalizedName;
+
+        if (sameName && hasNoPrice) {
           previous.bonusQty += paidQty;
+          previous.warning =
+            'تم احتساب صف لاحق كبونص؛ يرجى التأكد يدوياً.';
           previous.sourceRows.push(item.sourceRows[0]);
         } else {
           unresolved.push({
             page: pageNumber,
             row: index + 1,
             text: item.sourceRows[0].text,
-            reason: 'قيمة فارغة دون تطابق مؤكد مع الصنف السابق'
+            reason: 'صف غير واضح؛ لم يتم احتسابه كبونص تلقائياً'
           });
         }
 
@@ -727,18 +652,13 @@
       const calculatedValue = paidQty * unitPrice;
 
       if (Math.abs(calculatedValue - printedValue) > 1) {
-        item.warning =
-          'القيمة المطبوعة لا تطابق الكمية × السعر';
+        item.warning = 'القيمة المطبوعة لا تطابق الكمية × السعر';
       }
 
       items.push(item);
     });
 
-    return {
-      items,
-      unresolved,
-      bounds
-    };
+    return { items, unresolved, bounds };
   }
 
   function comparePages(results) {
@@ -761,9 +681,9 @@
     results.forEach((result, index) => {
       if (!result.invoiceNumber) {
         reviewWarnings.push(
-          'رقم الفاتورة غير مقروء في الصفحة ' +
+          'رقم الفاتورة غير مقروء بوضوح في الصفحة ' +
           (index + 1) +
-          '. يجب التأكد منه يدوياً.'
+          '. تأكد منه يدوياً.'
         );
       }
     });
@@ -773,9 +693,7 @@
     const merged = [];
 
     results.forEach(result => {
-      result.items.forEach(item => {
-        merged.push({ ...item });
-      });
+      result.items.forEach(item => merged.push({ ...item }));
     });
 
     return merged;
@@ -789,14 +707,13 @@
 
     if (printedTotal === null || printedTotal === undefined) {
       reviewWarnings.push(
-        'لم يتمكن القارئ من تحديد الإجمالي المطبوع في الصفحة الأخيرة.'
+        'لم يتم تحديد الإجمالي المطبوع بثقة؛ تمت مراجعة الأصناف دون مقارنة الإجمالي.'
       );
       return;
     }
 
     const calculatedTotal = candidates.reduce(
-      (sum, item) =>
-        sum + item.paidQty * item.unitPrice,
+      (sum, item) => sum + item.paidQty * item.unitPrice,
       0
     );
 
@@ -836,17 +753,13 @@
 
       const label = document.createElement('strong');
       label.textContent =
-        'صنف ' + (index + 1) +
-        ' · صفحة ' + candidate.page;
+        'صنف ' + (index + 1) + ' · صفحة ' + candidate.page;
 
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'remove-item';
       remove.textContent = '×';
-      remove.setAttribute(
-        'aria-label',
-        'حذف الصنف من نتائج القراءة'
-      );
+      remove.setAttribute('aria-label', 'حذف الصنف من نتائج القراءة');
 
       remove.addEventListener('click', () => {
         lastCandidates.splice(index, 1);
@@ -877,22 +790,17 @@
 
         if (type === 'number') {
           input.min = key === 'paidQty' ? '1' : '0';
-          input.step = '1';
-          input.inputMode = 'numeric';
+          input.step = key === 'unitPrice' ? '0.01' : '1';
+          input.inputMode = 'decimal';
         }
 
-        input.value =
-          candidate[key] == null
-            ? ''
-            : String(candidate[key]);
+        input.value = candidate[key] == null
+          ? ''
+          : String(candidate[key]);
 
         input.addEventListener('input', () => {
           candidate[key] = type === 'number'
-            ? (
-              input.value.trim() === ''
-                ? null
-                : Number(input.value)
-            )
+            ? (input.value.trim() === '' ? null : Number(input.value))
             : input.value;
         });
 
@@ -913,8 +821,7 @@
     });
 
     if (count) {
-      count.textContent =
-        lastCandidates.length + ' أصناف مقترحة';
+      count.textContent = lastCandidates.length + ' أصناف مقترحة';
     }
 
     if (hint) {
@@ -922,13 +829,9 @@
         'راجع الأصناف قبل الإضافة.';
     }
 
-    if (raw) {
-      raw.textContent = lastRawText;
-    }
+    if (raw) raw.textContent = lastRawText;
 
-    if (addButton) {
-      addButton.disabled = invoiceMismatch;
-    }
+    if (addButton) addButton.disabled = invoiceMismatch;
 
     panel.hidden = false;
   }
@@ -948,7 +851,6 @@
     }
 
     resetResults();
-
     setProgress(0, 'جارٍ تشغيل محرك قراءة الفواتير...');
 
     worker = await window.Tesseract.createWorker(
@@ -956,14 +858,10 @@
       1,
       {
         logger(message) {
-          if (
-            message &&
-            typeof message.progress === 'number'
-          ) {
-            const progress =
-              message.status === 'recognizing text'
-                ? message.progress * 100
-                : Math.min(15, message.progress * 15);
+          if (message && typeof message.progress === 'number') {
+            const progress = message.status === 'recognizing text'
+              ? message.progress * 100
+              : Math.min(15, message.progress * 15);
 
             setProgress(
               progress,
@@ -977,39 +875,24 @@
     );
 
     try {
-      for (
-        let index = 0;
-        index < selectedFiles.length;
-        index += 1
-      ) {
+      for (let index = 0; index < selectedFiles.length; index += 1) {
         const pageNumber = index + 1;
 
-        const baseProgress =
-          (index / selectedFiles.length) * 100;
-
         setProgress(
-          baseProgress,
-          'معالجة الصفحة ' +
-          pageNumber +
-          ' من ' +
-          selectedFiles.length
+          (index / selectedFiles.length) * 100,
+          'معالجة الصفحة ' + pageNumber +
+          ' من ' + selectedFiles.length
         );
 
-        const prepared = await prepareImage(
-          selectedFiles[index]
-        );
+        const prepared = await prepareImage(selectedFiles[index]);
 
         const result = await worker.recognize(
           prepared.canvas,
           {},
-          {
-            text: true,
-            tsv: true
-          }
+          { text: true, tsv: true }
         );
 
         const text = result?.data?.text || '';
-
         const words = parseTSV(
           result?.data?.tsv || '',
           prepared.width,
@@ -1017,15 +900,8 @@
         );
 
         const lines = groupWordsByLine(words);
-
-        const invoiceNumber =
-          extractInvoiceNumber(lines);
-
-        const printedTotal =
-          extractPrintedTotal(
-            lines,
-            prepared.height
-          );
+        const invoiceNumber = extractInvoiceNumber(lines);
+        const printedTotal = extractPrintedTotal(lines, prepared.height);
 
         const extracted = extractPageItems(
           words,
@@ -1044,17 +920,12 @@
         });
 
         lastRawText +=
-          '\n\n========== الصفحة ' +
-          pageNumber +
-          ' ==========\n' +
-          text;
+          '\n\n========== الصفحة ' + pageNumber + ' ==========\n' + text;
 
         setProgress(
           ((index + 1) / selectedFiles.length) * 100,
-          'اكتملت قراءة الصفحة ' +
-          pageNumber +
-          ' من ' +
-          selectedFiles.length
+          'اكتملت قراءة الصفحة ' + pageNumber +
+          ' من ' + selectedFiles.length
         );
       }
     } finally {
@@ -1065,7 +936,6 @@
     }
 
     comparePages(pageResults);
-
     lastCandidates = mergePageItems(pageResults);
 
     const unresolvedCount = pageResults.reduce(
@@ -1076,7 +946,7 @@
     if (unresolvedCount) {
       reviewWarnings.push(
         'توجد ' + unresolvedCount +
-        ' صفوف لم تُقرأ بثقة كافية، راجع النص الخام.'
+        ' صفوف لم تُقرأ بثقة كافية؛ راجع النص الخام.'
       );
     }
 
@@ -1084,17 +954,13 @@
       page.items.forEach(item => {
         if (item.warning) {
           reviewWarnings.push(
-            'تحذير في الصفحة ' + page.page +
-            ': ' + item.name
+            'تحذير في الصفحة ' + page.page + ': ' + item.name
           );
         }
       });
     });
 
-    validatePrintedTotal(
-      pageResults,
-      lastCandidates
-    );
+    validatePrintedTotal(pageResults, lastCandidates);
 
     const firstNumber = pageResults.find(
       page => page.invoiceNumber
@@ -1108,11 +974,7 @@
       $('invoiceNumber').value = firstNumber;
     }
 
-    setProgress(
-      100,
-      'اكتملت قراءة جميع الصفحات. راجع النتائج.'
-    );
-
+    setProgress(100, 'اكتملت قراءة جميع الصفحات. راجع النتائج.');
     renderReview();
 
     if (!lastCandidates.length) {
@@ -1130,9 +992,7 @@
 
   function addRecognizedItems() {
     if (invoiceMismatch) {
-      toast(
-        'لا يمكن دمج صفحات تحمل أرقام فواتير مختلفة.'
-      );
+      toast('لا يمكن دمج صفحات تحمل أرقام فواتير مختلفة.');
       return;
     }
 
@@ -1143,8 +1003,7 @@
     if (missingNumbers.length) {
       const accepted = confirm(
         'تعذر قراءة رقم الفاتورة في صفحة أو أكثر. ' +
-        'تأكد بنفسك أن جميع الصور تخص الفاتورة نفسها. ' +
-        'هل تريد المتابعة؟'
+        'تأكد بنفسك أن جميع الصور تخص الفاتورة نفسها. هل تريد المتابعة؟'
       );
 
       if (!accepted) return;
@@ -1157,7 +1016,7 @@
       Number(item.paidQty) > 0 &&
       Number.isSafeInteger(Number(item.bonusQty)) &&
       Number(item.bonusQty) >= 0 &&
-      Number.isSafeInteger(Number(item.unitPrice)) &&
+      Number.isFinite(Number(item.unitPrice)) &&
       Number(item.unitPrice) >= 0
     );
 
@@ -1189,8 +1048,7 @@
       }
 
       toast(
-        'تمت إضافة ' +
-        valid.length +
+        'تمت إضافة ' + valid.length +
         ' أصناف إلى مسودة الفاتورة.'
       );
     } catch (error) {
@@ -1217,9 +1075,7 @@
 
     input?.addEventListener('change', () => {
       const newFiles = Array.from(input.files || [])
-        .filter(file =>
-          file.type.startsWith('image/')
-        );
+        .filter(file => file.type.startsWith('image/'));
 
       let added = 0;
 
@@ -1252,9 +1108,7 @@
 
     $('clearInvoiceImagesBtn')?.addEventListener('click', () => {
       selectedFiles = [];
-
       if (input) input.value = '';
-
       resetResults();
       renderSelectedImages();
     });
@@ -1263,15 +1117,12 @@
       clearError();
 
       const button = $('runOcrBtn');
-
       if (button) button.disabled = true;
 
       try {
         await recognizeImages();
       } catch (error) {
-        showError(
-          error.message || 'حدث خطأ أثناء قراءة الصور.'
-        );
+        showError(error.message || 'حدث خطأ أثناء قراءة الصور.');
       } finally {
         if (button) {
           button.disabled = selectedFiles.length === 0;
@@ -1302,11 +1153,7 @@
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      init,
-      { once: true }
-    );
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
