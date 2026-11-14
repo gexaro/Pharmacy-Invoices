@@ -1,4 +1,3 @@
-
 (function () {
   'use strict';
 
@@ -52,7 +51,6 @@
     const name = String(data.name || '').trim();
     const paidQty = Number(data.paidQty);
     const bonusQty = Number(data.bonusQty);
-    const unitPrice = Number(data.unitPrice);
 
     if (!name) {
       throw new Error('أدخل اسم الصنف.');
@@ -74,6 +72,16 @@
     ) {
       throw new Error('كمية البونص غير صحيحة.');
     }
+
+    if (
+      data.unitPrice === null ||
+      data.unitPrice === undefined ||
+      String(data.unitPrice).trim() === ''
+    ) {
+      throw new Error('أدخل سعر الوحدة.');
+    }
+
+    const unitPrice = Number(data.unitPrice);
 
     if (
       !Number.isFinite(unitPrice) ||
@@ -202,24 +210,33 @@
   }
 
   function addManualItem() {
+    const nameInput = $('itemName');
+    const quantityInput = $('itemPaidQty');
+    const bonusInput = $('itemBonusQty');
+    const priceInput = $('itemUnitPrice');
+
+    if (!nameInput || !quantityInput || !bonusInput || !priceInput) {
+      toast('نموذج الفاتورة غير جاهز.');
+      return;
+    }
+
     try {
       const item = readItem({
-        name: $('itemName')?.value,
-        paidQty: $('itemPaidQty')?.value,
-        bonusQty: $('itemBonusQty')?.value || 0,
-        unitPrice: $('itemUnitPrice')?.value
+        name: nameInput.value,
+        paidQty: quantityInput.value,
+        bonusQty: bonusInput.value || 0,
+        unitPrice: priceInput.value
       });
 
       items.push(item);
 
-      $('itemName').value = '';
-      $('itemPaidQty').value = '';
-      $('itemBonusQty').value = '0';
-      $('itemUnitPrice').value = '';
+      nameInput.value = '';
+      quantityInput.value = '';
+      bonusInput.value = '0';
+      priceInput.value = '';
 
       render();
-      $('itemName')?.focus();
-
+      nameInput.focus();
     } catch (error) {
       toast(error.message);
     }
@@ -282,9 +299,10 @@
 
     if (
       !Number.isFinite(invoiceTotal) ||
-      invoiceTotal < 0
+      invoiceTotal < 0 ||
+      !Number.isSafeInteger(Math.round(invoiceTotal * 100))
     ) {
-      toast('إجمالي الفاتورة غير صالح.');
+      toast('إجمالي الفاتورة غير صالح أو أكبر من النطاق المسموح.');
       return;
     }
 
@@ -332,7 +350,6 @@
           detail: { type: 'invoice' }
         })
       );
-
     } catch (error) {
       toast(error.message || 'تعذر حفظ الفاتورة.');
     } finally {

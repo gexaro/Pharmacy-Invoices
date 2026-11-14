@@ -1,4 +1,3 @@
-
 (function () {
   'use strict';
 
@@ -132,7 +131,6 @@
           bonusTotal += bonus;
 
           const key = String(item.name || '').trim().toLocaleLowerCase();
-
           if (!key) return;
 
           if (!itemMap.has(key)) {
@@ -185,7 +183,6 @@
 
       renderInvoices(monthInvoices);
       renderItems(items);
-
       toast('تم تحديث التقرير.');
     } catch (error) {
       toast(error.message || 'تعذر إنشاء التقرير.');
@@ -208,21 +205,15 @@
       .forEach(invoice => {
         const category =
           invoice.category === 'medicine' ? 'الأدوية' : 'المواد العامة';
-
         const title = invoice.number
           ? 'فاتورة ' + invoice.number
           : 'فاتورة #' + invoice.id;
-
         const details =
           category + ' · ' + invoice.date +
           (invoice.notes ? ' · ' + invoice.notes : '');
 
         list.append(
-          makeRecordCard(
-            title,
-            details,
-            money(invoice.total) + ' د.ع'
-          )
+          makeRecordCard(title, details, money(invoice.total) + ' د.ع')
         );
       });
   }
@@ -248,11 +239,7 @@
         ' · مرات الشراء: ' + item.count;
 
       list?.append(
-        makeRecordCard(
-          item.name,
-          details,
-          money(item.total) + ' د.ع'
-        )
+        makeRecordCard(item.name, details, money(item.total) + ' د.ع')
       );
     });
 
@@ -269,7 +256,15 @@
   }
 
   function csvCell(value) {
-    const text = String(value ?? '');
+    let text = String(value ?? '').replace(/[\r\n\t]+/g, ' ');
+
+    // Spreadsheet apps may execute untrusted text as a formula. Prefix risky
+    // leading characters (including whitespace/control characters) with an
+    // apostrophe before applying standard CSV quote escaping.
+    if (/^[\s\u0000-\u001f]*[=+\-@]/.test(text)) {
+      text = "'" + text;
+    }
+
     return '"' + text.replace(/"/g, '""') + '"';
   }
 
