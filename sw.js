@@ -1,7 +1,6 @@
-
 'use strict';
 
-const CACHE_NAME = 'pharmacy-invoices-v3';
+const CACHE_NAME = 'pharmacy-invoices-v4';
 
 const CORE_FILES = [
   './index.html',
@@ -9,6 +8,7 @@ const CORE_FILES = [
   './db.js',
   './ocr.js',
   './invoice.js',
+  './import.js',
   './returns.js',
   './payments.js',
   './reports.js',
