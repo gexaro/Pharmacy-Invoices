@@ -1,4 +1,3 @@
-
 (function () {
   'use strict';
 
@@ -19,7 +18,6 @@
       }
 
       let request;
-
       try {
         request = indexedDB.open(DB_NAME, DB_VERSION);
       } catch (error) {
@@ -36,7 +34,6 @@
             keyPath: 'id',
             autoIncrement: true
           });
-
           store.createIndex('date', 'date', { unique: false });
           store.createIndex('category', 'category', { unique: false });
           store.createIndex('month', 'month', { unique: false });
@@ -47,7 +44,6 @@
             keyPath: 'id',
             autoIncrement: true
           });
-
           store.createIndex('date', 'date', { unique: false });
           store.createIndex('category', 'category', { unique: false });
           store.createIndex('invoiceId', 'invoiceId', { unique: false });
@@ -58,7 +54,6 @@
             keyPath: 'id',
             autoIncrement: true
           });
-
           store.createIndex('date', 'date', { unique: false });
         }
 
@@ -69,12 +64,10 @@
 
       request.onsuccess = () => {
         const db = request.result;
-
         db.onversionchange = () => {
           db.close();
           databasePromise = null;
         };
-
         resolve(db);
       };
 
@@ -98,30 +91,20 @@
     return openDatabase().then(db => new Promise((resolve, reject) => {
       let tx;
       let result;
-
       try {
         tx = db.transaction(storeNames, mode);
         result = operation(tx);
       } catch (error) {
         if (tx) {
-          try {
-            tx.abort();
-          } catch (_) {}
+          try { tx.abort(); } catch (_) {}
         }
-
         reject(error);
         return;
       }
 
       tx.oncomplete = () => resolve(result);
-
-      tx.onerror = () => {
-        reject(tx.error || new Error('فشلت عملية قاعدة البيانات.'));
-      };
-
-      tx.onabort = () => {
-        reject(tx.error || new Error('تم إلغاء عملية قاعدة البيانات.'));
-      };
+      tx.onerror = () => reject(tx.error || new Error('فشلت عملية قاعدة البيانات.'));
+      tx.onabort = () => reject(tx.error || new Error('تم إلغاء عملية قاعدة البيانات.'));
     }));
   }
 
@@ -131,50 +114,146 @@
     }
 
     return openDatabase().then(db => new Promise((resolve, reject) => {
+      let result;
       const tx = db.transaction(storeName, 'readonly');
       const request = tx.objectStore(storeName).getAll();
-
-      request.onsuccess = () => {
-        resolve(request.result || []);
-      };
-
-      request.onerror = () => {
-        reject(request.error || new Error('تعذر قراءة البيانات.'));
-      };
-
-      tx.onabort = () => {
-        reject(tx.error || new Error('تم إلغاء عملية القراءة.'));
-      };
+      request.onsuccess = () => { result = request.result || []; };
+      request.onerror = () => reject(request.error || new Error('تعذر قراءة البيانات.'));
+      tx.oncomplete = () => resolve(result || []);
+      tx.onerror = () => reject(tx.error || new Error('تعذرت قراءة البيانات.'));
+      tx.onabort = () => reject(tx.error || new Error('تم إلغاء عملية القراءة.'));
     }));
   }
 
   function add(storeName, value) {
-    if (
-      !STORE_NAMES.includes(storeName) ||
-      storeName === 'settings'
-    ) {
-      return Promise.reject(
-        new Error('اسم مخزن البيانات غير صالح لهذه العملية.')
-      );
+    if (!STORE_NAMES.includes(storeName) || storeName === 'settings') {
+      return Promise.reject(new Error('اسم مخزن البيانات غير صالح لهذه العملية.'));
     }
 
     return openDatabase().then(db => new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       const request = tx.objectStore(storeName).add(value);
-
-      request.onsuccess = () => {
-        value.id = request.result;
-      };
-
+      request.onsuccess = () => { value.id = request.result; };
       tx.oncomplete = () => resolve(value);
+      tx.onerror = () => reject(tx.error || request.error || new Error('تعذر حفظ البيانات.'));
+      tx.onabort = () => reject(tx.error || new Error('تم إلغاء عملية الحفظ.'));
+    }));
+  }
 
-      tx.onerror = () => {
-        reject(tx.error || request.error || new Error('تعذر حفظ البيانات.'));
+  // تحقق من حد المردود وأضفه ضمن معاملة واحدة حتى لا تتجاوز عمليات النوافذ
+  // المتزامنة قيمة الفاتورة أو إجمالي مشتريات الفئة.
+  function addReturnWithinCapacity(value) {
+    if (
+      !value ||
+      !['medicine', 'general'].includes(value.category) ||
+      !isValidDate(value.date) ||
+      !isValidNumber(value.amount) ||
+      value.amount <= 0 ||
+      !Number.isSafeInteger(Math.round(roundNumber(value.amount) * 100)) ||
+      (value.invoiceId !== null && value.invoiceId !== undefined &&
+        (!Number.isSafeInteger(value.invoiceId) || value.invoiceId <= 0))
+    ) {
+      return Promise.reject(new Error('بيانات المردود غير صالحة.'));
+    }
+
+    return openDatabase().then(db => new Promise((resolve, reject) => {
+      let tx;
+      let validationError = null;
+      let settled = false;
+
+      const fail = error => {
+        if (settled) return;
+        settled = true;
+        reject(error);
       };
 
-      tx.onabort = () => {
-        reject(tx.error || new Error('تم إلغاء عملية الحفظ.'));
-      };
+      try {
+        tx = db.transaction(['invoices', 'returns'], 'readwrite');
+        const invoiceStore = tx.objectStore('invoices');
+        const returnStore = tx.objectStore('returns');
+        const invoiceRequest = invoiceStore.getAll();
+        const returnRequest = returnStore.getAll();
+        let invoices;
+        let returns;
+
+        const validateAndAdd = () => {
+          if (!invoices || !returns) return;
+
+          const categoryInvoices = invoices.filter(invoice =>
+            invoice.category === value.category
+          );
+          const purchased = roundNumber(categoryInvoices.reduce(
+            (sum, invoice) => sum + (Number(invoice.total) || 0), 0
+          ));
+          const categoryReturned = roundNumber(returns
+            .filter(item => item.category === value.category)
+            .reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
+          let capacity = Math.max(0, roundNumber(purchased - categoryReturned));
+
+          if (value.invoiceId !== null && value.invoiceId !== undefined) {
+            const invoice = categoryInvoices.find(item =>
+              String(item.id) === String(value.invoiceId)
+            );
+            if (!invoice) {
+              validationError = new Error('الفاتورة المختارة غير موجودة أو لا تط��بق الفئة.');
+              tx.abort();
+              return;
+            }
+            const invoiceReturned = roundNumber(returns
+              .filter(item => item.category === value.category &&
+                String(item.invoiceId) === String(value.invoiceId))
+              .reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
+            capacity = Math.min(
+              capacity,
+              Math.max(0, roundNumber(Number(invoice.total || 0) - invoiceReturned))
+            );
+          }
+
+          if (roundNumber(value.amount) > capacity) {
+            validationError = new Error(
+              'قيمة المردود تتجاوز الحد المتاح (' + capacity + ' د.ع).'
+            );
+            tx.abort();
+            return;
+          }
+
+          const addRequest = returnStore.add(value);
+          addRequest.onsuccess = () => { value.id = addRequest.result; };
+          addRequest.onerror = () => {
+            validationError = addRequest.error || new Error('تعذر حفظ المردود.');
+          };
+        };
+
+        invoiceRequest.onsuccess = () => {
+          invoices = invoiceRequest.result || [];
+          validateAndAdd();
+        };
+        returnRequest.onsuccess = () => {
+          returns = returnRequest.result || [];
+          validateAndAdd();
+        };
+        invoiceRequest.onerror = () => {
+          validationError = invoiceRequest.error || new Error('تعذر فحص الفواتير.');
+          try { tx.abort(); } catch (_) {}
+        };
+        returnRequest.onerror = () => {
+          validationError = returnRequest.error || new Error('تعذر فحص المردودات.');
+          try { tx.abort(); } catch (_) {}
+        };
+
+        tx.oncomplete = () => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
+        tx.onerror = () => fail(validationError || tx.error || new Error('تعذر حفظ المردود.'));
+        tx.onabort = () => fail(validationError || tx.error || new Error('تم إلغاء حفظ المردود.'));
+      } catch (error) {
+        if (tx) {
+          try { tx.abort(); } catch (_) {}
+        }
+        fail(error);
+      }
     }));
   }
 
@@ -186,16 +265,9 @@
     return openDatabase().then(db => new Promise((resolve, reject) => {
       const tx = db.transaction(storeName, 'readwrite');
       const request = tx.objectStore(storeName).put(value);
-
       tx.oncomplete = () => resolve(value);
-
-      tx.onerror = () => {
-        reject(tx.error || request.error || new Error('تعذر تحديث البيانات.'));
-      };
-
-      tx.onabort = () => {
-        reject(tx.error || new Error('تم إلغاء عملية التحديث.'));
-      };
+      tx.onerror = () => reject(tx.error || request.error || new Error('تعذر تحديث البيانات.'));
+      tx.onabort = () => reject(tx.error || new Error('تم إلغاء عملية التحديث.'));
     }));
   }
 
@@ -203,40 +275,25 @@
     if (!STORE_NAMES.includes(storeName)) {
       return Promise.reject(new Error('اسم مخزن البيانات غير صالح.'));
     }
-
-    return transaction(
-      [storeName],
-      'readwrite',
-      tx => tx.objectStore(storeName).delete(key)
+    return transaction([storeName], 'readwrite', tx =>
+      tx.objectStore(storeName).delete(key)
     );
   }
 
   function clearAll() {
     return transaction(STORE_NAMES, 'readwrite', tx => {
-      STORE_NAMES.forEach(name => {
-        tx.objectStore(name).clear();
-      });
+      STORE_NAMES.forEach(name => tx.objectStore(name).clear());
     });
   }
 
   async function getSetting(key, fallback = null) {
     const db = await openDatabase();
-
     return new Promise((resolve, reject) => {
       const tx = db.transaction('settings', 'readonly');
       const request = tx.objectStore('settings').get(key);
-
-      request.onsuccess = () => {
-        resolve(request.result ? request.result.value : fallback);
-      };
-
-      request.onerror = () => {
-        reject(request.error || new Error('تعذر قراءة الإعدادات.'));
-      };
-
-      tx.onabort = () => {
-        reject(tx.error || new Error('تم إلغاء قراءة الإعدادات.'));
-      };
+      request.onsuccess = () => resolve(request.result ? request.result.value : fallback);
+      request.onerror = () => reject(request.error || new Error('تعذر قراءة الإعدادات.'));
+      tx.onabort = () => reject(tx.error || new Error('تم إلغاء قراءة الإعدادات.'));
     });
   }
 
@@ -244,7 +301,6 @@
     if (typeof key !== 'string' || !key.trim()) {
       throw new Error('اسم الإعداد غير صالح.');
     }
-
     return put('settings', {
       key,
       value,
@@ -256,17 +312,11 @@
     const [invoices, returns, payments, settings] = await Promise.all(
       STORE_NAMES.map(name => getAll(name))
     );
-
     return {
       format: 'pharmacy-invoices-backup',
       version: 1,
       exportedAt: new Date().toISOString(),
-      data: {
-        invoices,
-        returns,
-        payments,
-        settings
-      }
+      data: { invoices, returns, payments, settings }
     };
   }
 
@@ -275,11 +325,14 @@
   }
 
   function isValidDate(value) {
-    return (
-      typeof value === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-      !Number.isNaN(Date.parse(value + 'T00:00:00'))
-    );
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day;
   }
 
   function validCategory(value) {
@@ -287,19 +340,15 @@
   }
 
   function getAllocationAmount(allocation) {
-    if (isValidNumber(allocation)) {
-      return allocation;
-    }
-
-    if (
-      allocation &&
-      typeof allocation === 'object' &&
-      isValidNumber(allocation.amount)
-    ) {
+    if (isValidNumber(allocation)) return allocation;
+    if (allocation && typeof allocation === 'object' && isValidNumber(allocation.amount)) {
       return allocation.amount;
     }
-
     return null;
+  }
+
+  function roundNumber(value) {
+    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
 
   function validateBackup(backup) {
@@ -310,196 +359,151 @@
       !backup.data ||
       typeof backup.data !== 'object'
     ) {
-      throw new Error(
-        'ملف النسخة الاحتياطية غير صالح أو لا يخص هذا التطبيق.'
-      );
+      throw new Error('ملف النسخة الاحتياطية غير صالح أو لا يخص هذا التطبيق.');
     }
 
     for (const name of STORE_NAMES) {
       if (!Array.isArray(backup.data[name])) {
-        throw new Error(
-          'ملف النسخة الاحتياطية ناقص أو تالف: ' + name
-        );
+        throw new Error('ملف النسخة الاحتياطية ناقص أو تالف: ' + name);
       }
     }
 
-    // التحقق من الفواتير.
+    for (const name of ['invoices', 'returns', 'payments']) {
+      const ids = new Set();
+      backup.data[name].forEach(record => {
+        if (!record || !Number.isSafeInteger(record.id) || record.id <= 0 || ids.has(record.id)) {
+          throw new Error('توجد معرّفات مفقودة أو مكررة داخل ' + name + '.');
+        }
+        ids.add(record.id);
+      });
+    }
+
     backup.data.invoices.forEach(invoice => {
       if (
-        !invoice ||
         !validCategory(invoice.category) ||
         !Array.isArray(invoice.items) ||
         !isValidNumber(invoice.total) ||
         invoice.total < 0 ||
+        !Number.isSafeInteger(Math.round(invoice.total * 100)) ||
         !isValidDate(invoice.date)
       ) {
-        throw new Error(
-          'توجد فاتورة غير صالحة داخل النسخة الاحتياطية.'
-        );
+        throw new Error('توجد فاتورة غير صالحة داخل النسخة الاحتياطية.');
       }
 
+      let itemSum = 0;
       invoice.items.forEach(item => {
         if (
           !item ||
           typeof item.name !== 'string' ||
           !item.name.trim() ||
-          !isValidNumber(item.paidQty) ||
-          !Number.isInteger(item.paidQty) ||
+          !Number.isSafeInteger(item.paidQty) ||
           item.paidQty <= 0 ||
-          !isValidNumber(item.bonusQty) ||
-          !Number.isInteger(item.bonusQty) ||
+          !Number.isSafeInteger(item.bonusQty) ||
           item.bonusQty < 0 ||
           !isValidNumber(item.unitPrice) ||
           item.unitPrice < 0 ||
           !isValidNumber(item.itemTotal) ||
-          item.itemTotal < 0
+          item.itemTotal < 0 ||
+          !Number.isSafeInteger(Math.round(item.itemTotal * 100)) ||
+          Math.abs(roundNumber(item.paidQty * item.unitPrice) - item.itemTotal) > 0.02
         ) {
-          throw new Error(
-            'يوجد صنف غير صالح داخل إحدى الفواتير.'
-          );
+          throw new Error('يوجد صنف غير صالح أو غير متسق داخل إحدى الفواتير.');
         }
+        itemSum += item.itemTotal;
       });
-    });
 
-    // التحقق من المردودات.
-    backup.data.returns.forEach(item => {
-      if (
-        !item ||
-        !validCategory(item.category) ||
-        !isValidNumber(item.amount) ||
-        item.amount <= 0 ||
-        !isValidDate(item.date)
-      ) {
-        throw new Error(
-          'يوجد مردود غير صالح داخل النسخة الاحتياطية.'
-        );
+      if (Math.abs(roundNumber(itemSum) - invoice.total) > 0.02) {
+        throw new Error('إجمالي إحدى الفواتير لا يطابق مجموع أصنافها.');
       }
     });
 
-    // التحقق من التسديدات، مع دعم الشكل القديم والجديد.
+    backup.data.returns.forEach(item => {
+      if (
+        !validCategory(item.category) ||
+        !isValidNumber(item.amount) ||
+        item.amount <= 0 ||
+        !Number.isSafeInteger(Math.round(item.amount * 100)) ||
+        !isValidDate(item.date) ||
+        (item.invoiceId !== null && item.invoiceId !== undefined &&
+          (!Number.isSafeInteger(item.invoiceId) || item.invoiceId <= 0))
+      ) {
+        throw new Error('يوجد مردود غير صالح داخل النسخة الاحتياطية.');
+      }
+    });
+
     backup.data.payments.forEach(item => {
       if (
         !item ||
         !isValidNumber(item.amount) ||
         item.amount <= 0 ||
+        !Number.isSafeInteger(Math.round(item.amount * 100)) ||
         !isValidDate(item.date) ||
         !item.allocations ||
         typeof item.allocations !== 'object'
       ) {
-        throw new Error(
-          'يوجد تسديد غير صالح داخل النسخة الاحتياطية.'
-        );
+        throw new Error('يوجد تسديد غير صالح داخل النسخة الاحتياطية.');
       }
 
-      const medicine = getAllocationAmount(
-        item.allocations.medicine
-      );
-
-      const general = getAllocationAmount(
-        item.allocations.general
-      );
-
-      if (
-        medicine === null ||
-        general === null ||
-        medicine < 0 ||
-        general < 0
-      ) {
-        throw new Error(
-          'توزيع أحد التسديدات غير صالح داخل النسخة الاحتياطية.'
-        );
+      const medicine = getAllocationAmount(item.allocations.medicine);
+      const general = getAllocationAmount(item.allocations.general);
+      if (medicine === null || general === null || medicine < 0 || general < 0) {
+        throw new Error('توزيع أحد التسديدات غير صالح داخل النسخة الاحتياطية.');
       }
 
       if (Math.abs(roundNumber(medicine + general) - item.amount) > 0.02) {
-        throw new Error(
-          'مجموع توزيع أحد التسديدات لا يطابق مبلغ التسديد.'
-        );
+        throw new Error('مجموع توزيع أحد التسديدات لا يطابق مبلغ التسديد.');
       }
 
-      // يدعم discountSnapshot أو discounts في السجلات القديمة.
       const snapshot = item.discountSnapshot || item.discounts;
-
-      if (
-        snapshot &&
-        (
-          !isValidNumber(Number(snapshot.medicine)) ||
-          !isValidNumber(Number(snapshot.general)) ||
-          Number(snapshot.medicine) < 0 ||
-          Number(snapshot.medicine) > 100 ||
-          Number(snapshot.general) < 0 ||
-          Number(snapshot.general) > 100
-        )
-      ) {
-        throw new Error(
-          'نسب الخصم في أحد التسديدات غير صالحة.'
-        );
+      if (snapshot && (
+        !Number.isFinite(Number(snapshot.medicine)) ||
+        !Number.isFinite(Number(snapshot.general)) ||
+        Number(snapshot.medicine) < 0 || Number(snapshot.medicine) > 100 ||
+        Number(snapshot.general) < 0 || Number(snapshot.general) > 100
+      )) {
+        throw new Error('نسب الخصم في أحد التسديدات غير صالحة.');
       }
     });
 
-    // التحقق من الإعدادات.
+    const settingKeys = new Set();
     backup.data.settings.forEach(item => {
       if (
         !item ||
         typeof item.key !== 'string' ||
         !item.key.trim() ||
-        !Object.prototype.hasOwnProperty.call(item, 'value')
+        !Object.prototype.hasOwnProperty.call(item, 'value') ||
+        settingKeys.has(item.key)
       ) {
-        throw new Error(
-          'يوجد إعداد غير صالح داخل النسخة الاحتياطية.'
-        );
+        throw new Error('يوجد إعداد غير صالح أو مكرر داخل النسخة الاحتياطية.');
       }
+      settingKeys.add(item.key);
     });
   }
 
-  function roundNumber(value) {
-    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-  }
-
   async function importBackup(backup) {
-    // لا يتم مسح أي بيانات قبل اجتياز جميع اختبارات النسخة.
     validateBackup(backup);
-
     const db = await openDatabase();
 
     return new Promise((resolve, reject) => {
       let tx;
-
       try {
         tx = db.transaction(STORE_NAMES, 'readwrite');
-
         STORE_NAMES.forEach(name => {
           const store = tx.objectStore(name);
-
           store.clear();
-
-          backup.data[name].forEach(record => {
-            store.put(record);
-          });
+          backup.data[name].forEach(record => store.put(record));
         });
       } catch (error) {
         if (tx) {
-          try {
-            tx.abort();
-          } catch (_) {}
+          try { tx.abort(); } catch (_) {}
         }
-
         reject(error);
         return;
       }
 
       tx.oncomplete = () => resolve(true);
-
-      tx.onerror = () => {
-        reject(
-          tx.error || new Error('فشلت استعادة النسخة الاحتياطية.')
-        );
-      };
-
-      tx.onabort = () => {
-        reject(
-          tx.error || new Error('تم إلغاء استعادة النسخة الاحتياطية.')
-        );
-      };
+      tx.onerror = () => reject(tx.error || new Error('فشلت استعادة النسخة الاحتياطية.'));
+      tx.onabort = () => reject(tx.error || new Error('تم إلغاء استعادة النسخة الاحتياطية.'));
     });
   }
 
@@ -507,6 +511,7 @@
     open: openDatabase,
     getAll,
     add,
+    addReturnWithinCapacity,
     put,
     remove,
     clearAll,

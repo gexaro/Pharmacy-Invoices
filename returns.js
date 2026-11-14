@@ -2,10 +2,8 @@
   'use strict';
 
   const $ = id => document.getElementById(id);
-
   const round = value =>
     Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-
   const money = value =>
     new Intl.NumberFormat('en-US', {
       maximumFractionDigits: 2
@@ -21,57 +19,27 @@
 
   function today() {
     const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
   function validDate(value) {
-    if (
-      typeof value !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(value)
-    ) {
-      return false;
-    }
-
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
     const [year, month, day] = value.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-
-    return (
-      date.getFullYear() === year &&
+    return date.getFullYear() === year &&
       date.getMonth() === month - 1 &&
-      date.getDate() === day
-    );
+      date.getDate() === day;
   }
 
   function validAmount(value) {
-    if (value === null || value === undefined || String(value).trim() === '') {
-      return null;
-    }
-
+    if (value === null || value === undefined || String(value).trim() === '') return null;
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount <= 0) return null;
-
     const rounded = round(amount);
     return Number.isFinite(rounded) &&
       Number.isSafeInteger(Math.round(rounded * 100))
       ? rounded
       : null;
-  }
-
-  async function getInvoices() {
-    return window.PharmacyDB.getAll('invoices');
-  }
-
-  async function getReturns() {
-    return window.PharmacyDB.getAll('returns');
-  }
-
-  function categoryName(category) {
-    return category === 'medicine'
-      ? 'الأدوية'
-      : 'المواد العامة';
   }
 
   async function calculateCapacity(category, invoiceId = null) {
@@ -80,64 +48,33 @@
     }
 
     const [invoices, returns] = await Promise.all([
-      getInvoices(),
-      getReturns()
+      window.PharmacyDB.getAll('invoices'),
+      window.PharmacyDB.getAll('returns')
     ]);
+    const categoryInvoices = invoices.filter(invoice => invoice.category === category);
+    const categoryPurchased = round(categoryInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.total || 0), 0
+    ));
+    const categoryReturned = round(returns
+      .filter(item => item.category === category)
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0));
+    const categoryCapacity = Math.max(0, round(categoryPurchased - categoryReturned));
 
-    const categoryInvoices = invoices.filter(
-      invoice => invoice.category === category
-    );
-
-    const categoryPurchased = round(
-      categoryInvoices.reduce(
-        (sum, invoice) => sum + Number(invoice.total || 0),
-        0
-      )
-    );
-
-    const categoryReturned = round(
-      returns
-        .filter(item => item.category === category)
-        .reduce(
-          (sum, item) => sum + Number(item.amount || 0),
-          0
-        )
-    );
-
-    const categoryCapacity = Math.max(
-      0,
-      round(categoryPurchased - categoryReturned)
-    );
-
-    if (!invoiceId) {
-      return categoryCapacity;
-    }
+    if (!invoiceId) return categoryCapacity;
 
     const selectedInvoice = categoryInvoices.find(
       invoice => String(invoice.id) === String(invoiceId)
     );
+    if (!selectedInvoice) return 0;
 
-    if (!selectedInvoice) {
-      return 0;
-    }
-
-    const invoiceReturned = round(
-      returns
-        .filter(item =>
-          item.category === category &&
-          String(item.invoiceId) === String(invoiceId)
-        )
-        .reduce(
-          (sum, item) => sum + Number(item.amount || 0),
-          0
-        )
-    );
-
+    const invoiceReturned = round(returns
+      .filter(item => item.category === category &&
+        String(item.invoiceId) === String(invoiceId))
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0));
     const invoiceCapacity = Math.max(
       0,
       round(Number(selectedInvoice.total || 0) - invoiceReturned)
     );
-
     return Math.min(invoiceCapacity, categoryCapacity);
   }
 
@@ -146,9 +83,8 @@
     if (!select) return;
 
     const previous = select.value;
-    const invoices = await getInvoices();
+    const invoices = await window.PharmacyDB.getAll('invoices');
     const category = $('returnType')?.value;
-
     select.replaceChildren();
 
     const placeholder = document.createElement('option');
@@ -158,50 +94,35 @@
 
     invoices
       .filter(invoice => invoice.category === category)
-      .sort((a, b) =>
-        String(b.date).localeCompare(String(a.date))
-      )
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
       .forEach(invoice => {
         const option = document.createElement('option');
-
         option.value = String(invoice.id);
         option.textContent =
-          (invoice.number
-            ? 'فاتورة ' + invoice.number
-            : 'فاتورة #' + invoice.id) +
+          (invoice.number ? 'فاتورة ' + invoice.number : 'فاتورة #' + invoice.id) +
           ' — ' + invoice.date +
           ' — ' + money(invoice.total) + ' د.ع';
-
         select.append(option);
       });
 
-    if (
-      [...select.options].some(
-        option => option.value === previous
-      )
-    ) {
+    if ([...select.options].some(option => option.value === previous)) {
       select.value = previous;
     }
-
     await updateCapacity();
   }
 
   async function updateCapacity() {
     const info = $('returnCapacityInfo');
     if (!info) return;
-
     try {
       const category = $('returnType')?.value;
       const invoiceId = $('returnInvoice')?.value || null;
       const capacity = await calculateCapacity(category, invoiceId);
-
-      info.textContent =
-        'الحد المتاح للمردود في ' +
-        categoryName(category) +
+      info.textContent = 'الحد المتاح للمردود في ' +
+        (category === 'medicine' ? 'الأدوية' : 'المواد العامة') +
         ': ' + money(capacity) + ' د.ع';
     } catch (error) {
-      info.textContent =
-        error.message || 'تعذر حساب الحد المتاح.';
+      info.textContent = error.message || 'تعذر حساب الحد المتاح.';
     }
   }
 
@@ -216,21 +137,15 @@
       toast('اختر فئة المردود.');
       return;
     }
-
     if (!validDate(date)) {
       toast('اختر تاريخ المردود بصورة صحيحة.');
       return;
     }
-
     if (amount === null) {
       toast('أدخل قيمة مردود صحيحة أكبر من صفر وبحد أقصى منزلتين عشريتين.');
       return;
     }
-
-    if (
-      invoiceId !== null &&
-      (!Number.isSafeInteger(invoiceId) || invoiceId <= 0)
-    ) {
+    if (invoiceId !== null && (!Number.isSafeInteger(invoiceId) || invoiceId <= 0)) {
       toast('الفاتورة المختارة غير صحيحة.');
       return;
     }
@@ -240,16 +155,6 @@
     if (button) button.disabled = true;
 
     try {
-      const capacity = await calculateCapacity(category, invoiceId);
-
-      if (amount > capacity) {
-        toast(
-          'قيمة المردود تتجاوز الحد المتاح (' +
-          money(capacity) + ' د.ع).'
-        );
-        return;
-      }
-
       const record = {
         category,
         date,
@@ -261,20 +166,17 @@
         createdAt: new Date().toISOString()
       };
 
-      await window.PharmacyDB.add('returns', record);
+      // الفحص والحفظ يجريان بمعاملة واحدة، لمنع تجاوز الحد عند تعدد النوافذ.
+      await window.PharmacyDB.addReturnWithinCapacity(record);
 
       if ($('returnAmount')) $('returnAmount').value = '';
       if ($('returnNumber')) $('returnNumber').value = '';
       if ($('returnNotes')) $('returnNotes').value = '';
 
       toast('تم تسجيل المردود بنجاح.');
-
-      document.dispatchEvent(
-        new CustomEvent('pharmacy:data-changed', {
-          detail: { type: 'return' }
-        })
-      );
-
+      document.dispatchEvent(new CustomEvent('pharmacy:data-changed', {
+        detail: { type: 'return' }
+      }));
       await updateCapacity();
     } catch (error) {
       toast(error.message || 'تعذر تسجيل المردود.');
@@ -285,15 +187,10 @@
 
   function init() {
     if (!$('returnDate')) return;
-
-    if (!$('returnDate').value) {
-      $('returnDate').value = today();
-    }
-
+    if (!$('returnDate').value) $('returnDate').value = today();
     $('returnType')?.addEventListener('change', renderInvoices);
     $('returnInvoice')?.addEventListener('change', updateCapacity);
     $('saveReturnBtn')?.addEventListener('click', saveReturn);
-
     renderInvoices();
   }
 
