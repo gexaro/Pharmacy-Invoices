@@ -1,8 +1,9 @@
-
 (function () {
   'use strict';
 
   const $ = id => document.getElementById(id);
+
+  const CATEGORIES = ['medicine', 'general'];
 
   const round = value =>
     Math.round((Number(value) + Number.EPSILON) * 100) / 100;
@@ -28,34 +29,40 @@
     return `${year}-${month}-${day}`;
   }
 
-  function getDiscountAmount(payment, category) {
-    const recorded = payment.discountAmounts?.[category];
+  function categoryLabel(category) {
+    return category === 'medicine' ? 'الأدوية' : 'المواد العامة';
+  }
 
-    if (
-      recorded !== undefined &&
-      recorded !== null &&
-      Number.isFinite(Number(recorded))
-    ) {
-      return Math.max(0, Number(recorded));
+  // قيمة التوزيع قد تكون رقماً مباشرة (سجلات قديمة) أو كائناً فيه amount.
+  function allocationAmount(allocation) {
+    if (allocation && typeof allocation === 'object') {
+      return Math.max(0, Number(allocation.amount) || 0);
     }
 
-    const before = Number(
-      payment.balancesAfterCredit?.[category]
-    );
+    return Math.max(0, Number(allocation) || 0);
+  }
 
-    const after = Number(
-      payment.netDue?.[category]
-    );
+  function discountRecorded(payment, category) {
+    return Math.max(0, Number(payment.discountAmounts?.[category]) || 0);
+  }
 
-    if (
-      Number.isFinite(before) &&
-      Number.isFinite(after) &&
-      before >= after
-    ) {
-      return round(before - after);
-    }
+  // هل استُهلك خصم الفئة في تسديد سابق؟
+  // السجلات الجديدة تحمل discountGranted، أما القديمة فتُعامل كاستهلاك
+  // إذا كان لها توزيع أو خصم على الفئة.
+  function discountAlreadyGranted(payments, category) {
+    return payments.some(payment => {
+      if (
+        payment.discountGranted &&
+        typeof payment.discountGranted === 'object'
+      ) {
+        return payment.discountGranted[category] === true;
+      }
 
-    return 0;
+      return (
+        allocationAmount(payment.allocations?.[category]) > 0 ||
+        discountRecorded(payment, category) > 0
+      );
+    });
   }
 
   async function getBalances() {
@@ -67,7 +74,7 @@
 
     const result = {};
 
-    for (const category of ['medicine', 'general']) {
+    CATEGORIES.forEach(category => {
       const purchases = invoices
         .filter(item => item.category === category)
         .reduce((sum, item) => sum + Number(item.total || 0), 0);
@@ -80,17 +87,8 @@
       let discountsApplied = 0;
 
       payments.forEach(payment => {
-        const allocation = payment.allocations?.[category];
-
-        const value = typeof allocation === 'object'
-          ? allocation?.amount
-          : allocation;
-
-        paid += Number(value || 0);
-        discountsApplied += getDiscountAmount(
-          payment,
-          category
-        );
+        paid += allocationAmount(payment.allocations?.[category]);
+        discountsApplied += discountRecorded(payment, category);
       });
 
       result[category] = {
@@ -99,13 +97,10 @@
         paid: round(paid),
         discountsApplied: round(discountsApplied),
         balance: round(
-          purchases -
-          returned -
-          paid -
-          discountsApplied
+          purchases - returned - paid - discountsApplied
         )
       };
-    }
+    });
 
     return result;
   }
@@ -142,10 +137,7 @@
     if (medicine < 0 && general > 0) {
       const credit = -medicine;
 
-      medicineCreditUsed = round(
-        Math.min(credit, general)
-      );
-
+      medicineCreditUsed = round(Math.min(credit, general));
       general = round(general - medicineCreditUsed);
       remainingCredit = round(credit - medicineCreditUsed);
       medicine = 0;
@@ -153,18 +145,14 @@
     } else if (general < 0 && medicine > 0) {
       const credit = -general;
 
-      generalCreditUsed = round(
-        Math.min(credit, medicine)
-      );
-
+      generalCreditUsed = round(Math.min(credit, medicine));
       medicine = round(medicine - generalCreditUsed);
       remainingCredit = round(credit - generalCreditUsed);
       general = 0;
 
     } else {
       remainingCredit = round(
-        Math.max(0, -medicine) +
-        Math.max(0, -general)
+        Math.max(0, -medicine) + Math.max(0, -general)
       );
 
       medicine = Math.max(0, medicine);
@@ -180,58 +168,58 @@
     };
   }
 
-  function calculateNet(balance, discount) {
-    return round(
-      Math.max(0, balance) * (1 - discount / 100)
-    );
-  }
-
+  // الخصم يُحسب مرة واحدة فقط لكل فئة، على الرصيد الموجود عند أول تسديد.
+  // بعد ذلك يبقى المستحق كما هو دون خصم إضافي.
   async function calculateState() {
-    const [balances, discounts] = await Promise.all([
+    const [balances, discounts, payments] = await Promise.all([
       getBalances(),
-      getDiscounts()
+      getDiscounts(),
+      PharmacyDB.getAll('payments')
     ]);
 
     const adjusted = offsetCredits(balances);
 
-    const medicineNet = calculateNet(
-      adjusted.medicine,
-      discounts.medicine
-    );
+    const granted = {};
+    const grantsNow = {};
+    const discountNow = {};
+    const netDue = {};
 
-    const generalNet = calculateNet(
-      adjusted.general,
-      discounts.general
-    );
+    CATEGORIES.forEach(category => {
+      granted[category] = discountAlreadyGranted(payments, category);
+
+      grantsNow[category] =
+        !granted[category] && adjusted[category] > 0;
+
+      discountNow[category] = grantsNow[category]
+        ? round(adjusted[category] * discounts[category] / 100)
+        : 0;
+
+      netDue[category] = round(
+        adjusted[category] - discountNow[category]
+      );
+    });
 
     return {
       balances,
       adjusted,
       discounts,
-      medicineNet,
-      generalNet,
-      totalDue: round(medicineNet + generalNet)
+      grantsNow,
+      discountNow,
+      netDue,
+      totalDue: round(netDue.medicine + netDue.general)
     };
   }
 
-  // توزيع المبلغ بدقة منزلتين دون تجاوز رصيد أي فئة.
+  // توزيع المبلغ بدقة منزلتين دون تجاوز مستحق أي فئة.
   function splitPayment(amount, state) {
     const amountCents = Math.round(round(amount) * 100);
     const totalCents = Math.round(state.totalDue * 100);
 
-    const medicineDueCents = Math.round(
-      state.medicineNet * 100
-    );
-
-    const generalDueCents = Math.round(
-      state.generalNet * 100
-    );
+    const medicineDueCents = Math.round(state.netDue.medicine * 100);
+    const generalDueCents = Math.round(state.netDue.general * 100);
 
     if (totalCents <= 0 || amountCents <= 0) {
-      return {
-        medicine: 0,
-        general: 0
-      };
+      return { medicine: 0, general: 0 };
     }
 
     let medicineCents = Math.round(
@@ -261,16 +249,22 @@
     };
   }
 
+  function discountNote(state) {
+    const parts = CATEGORIES
+      .filter(category => state.discountNow[category] > 0)
+      .map(category =>
+        categoryLabel(category) + ' ' +
+        money(state.discountNow[category]) + ' د.ع'
+      );
+
+    return parts.length
+      ? ' · خصم يُطبق مرة واحدة: ' + parts.join('، ')
+      : '';
+  }
+
   async function render() {
     const state = await calculateState();
-
-    const {
-      balances,
-      discounts,
-      medicineNet,
-      generalNet,
-      totalDue
-    } = state;
+    const { balances, discounts, netDue, totalDue } = state;
 
     const values = {
       medicineBalance: balances.medicine.balance,
@@ -278,8 +272,8 @@
       totalBalance: round(
         balances.medicine.balance + balances.general.balance
       ),
-      medicineAfterDiscount: medicineNet,
-      generalAfterDiscount: generalNet,
+      medicineAfterDiscount: netDue.medicine,
+      generalAfterDiscount: netDue.general,
       paymentDue: totalDue
     };
 
@@ -307,22 +301,6 @@
 
     updatePaymentPreview(state);
 
-    const message = $('paymentPreviewMessage');
-
-    if (message && totalDue <= 0) {
-      const credit = Math.abs(
-        Math.min(
-          0,
-          balances.medicine.balance + balances.general.balance
-        )
-      );
-
-      message.textContent = credit > 0
-        ? 'لا يوجد مبلغ مستحق حالياً. الرصيد الدائن المتبقي: ' +
-          money(credit) + ' د.ع.'
-        : 'لا يوجد مبلغ مستحق للتسديد حالياً.';
-    }
-
     return state;
   }
 
@@ -330,20 +308,24 @@
     const message = $('paymentPreviewMessage');
     if (!message) return;
 
+    if (state.totalDue <= 0) {
+      message.textContent = 'لا يوجد مبلغ مستحق للتسديد حالياً.';
+      return;
+    }
+
     const input = $('paymentAmount')?.value;
 
     if (input === '' || input == null) {
       message.textContent =
-        'المستحق بعد تعويض الأرصدة الدائنة والخصم: ' +
-        money(state.totalDue) + ' د.ع.';
+        'المستحق بعد الخصم: ' + money(state.totalDue) + ' د.ع.' +
+        discountNote(state);
       return;
     }
 
     const amount = round(Number(input));
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      message.textContent =
-        'أدخل مبلغاً صحيحاً أكبر من صفر.';
+      message.textContent = 'أدخل مبلغاً صحيحاً أكبر من صفر.';
       return;
     }
 
@@ -354,18 +336,12 @@
       return;
     }
 
-    if (state.totalDue <= 0) {
-      message.textContent = 'لا يوجد مبلغ مستحق للتسديد.';
-      return;
-    }
-
     const allocation = splitPayment(amount, state);
 
     message.textContent =
-      'توزيع التسديد: الأدوية ' +
-      money(allocation.medicine) +
-      ' د.ع · المواد العامة ' +
-      money(allocation.general) + ' د.ع';
+      'توزيع التسديد: الأدوية ' + money(allocation.medicine) +
+      ' د.ع · المواد العامة ' + money(allocation.general) + ' د.ع' +
+      discountNote(state);
   }
 
   async function saveDiscounts() {
@@ -398,10 +374,7 @@
   }
 
   async function savePayment() {
-    const amount = round(
-      Number($('paymentAmount')?.value)
-    );
-
+    const amount = round(Number($('paymentAmount')?.value));
     const date = $('paymentDate')?.value;
 
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -441,15 +414,6 @@
 
       const allocation = splitPayment(amount, state);
 
-      const discountAmounts = {
-        medicine: round(
-          state.adjusted.medicine - state.medicineNet
-        ),
-        general: round(
-          state.adjusted.general - state.generalNet
-        )
-      };
-
       const record = {
         date,
         month: date.slice(0, 7),
@@ -482,11 +446,20 @@
           general: state.discounts.general
         },
 
-        discountAmounts,
+        // هل تم تطبيق الخصم في هذا التسديد؟ (مرة واحدة لكل فئة)
+        discountGranted: {
+          medicine: state.grantsNow.medicine,
+          general: state.grantsNow.general
+        },
+
+        discountAmounts: {
+          medicine: state.discountNow.medicine,
+          general: state.discountNow.general
+        },
 
         netDue: {
-          medicine: state.medicineNet,
-          general: state.generalNet,
+          medicine: state.netDue.medicine,
+          general: state.netDue.general,
           total: state.totalDue
         },
 
@@ -499,21 +472,18 @@
           medicine: {
             amount: allocation.medicine,
             remaining: round(
-              Math.max(0, state.medicineNet - allocation.medicine)
+              Math.max(0, state.netDue.medicine - allocation.medicine)
             )
           },
           general: {
             amount: allocation.general,
             remaining: round(
-              Math.max(0, state.generalNet - allocation.general)
+              Math.max(0, state.netDue.general - allocation.general)
             )
           }
         },
 
-        notes: String(
-          $('paymentNotes')?.value || ''
-        ).trim(),
-
+        notes: String($('paymentNotes')?.value || '').trim(),
         createdAt: new Date().toISOString()
       };
 
@@ -546,38 +516,21 @@
       $('paymentDate').value = today();
     }
 
-    $('savePaymentBtn')?.addEventListener(
-      'click',
-      savePayment
-    );
+    $('savePaymentBtn')?.addEventListener('click', savePayment);
+    $('medicineDiscount')?.addEventListener('change', saveDiscounts);
+    $('generalDiscount')?.addEventListener('change', saveDiscounts);
 
-    $('medicineDiscount')?.addEventListener(
-      'change',
-      saveDiscounts
-    );
+    $('paymentAmount')?.addEventListener('input', async () => {
+      try {
+        updatePaymentPreview(await calculateState());
+      } catch (_) {}
+    });
 
-    $('generalDiscount')?.addEventListener(
-      'change',
-      saveDiscounts
-    );
-
-    $('paymentAmount')?.addEventListener(
-      'input',
-      async () => {
-        try {
-          updatePaymentPreview(await calculateState());
-        } catch (_) {}
-      }
-    );
-
-    document.addEventListener(
-      'pharmacy:data-changed',
-      () => {
-        render().catch(error => {
-          toast(error.message || 'تعذر تحديث حساب التسديد.');
-        });
-      }
-    );
+    document.addEventListener('pharmacy:data-changed', () => {
+      render().catch(error => {
+        toast(error.message || 'تعذر تحديث حساب التسديد.');
+      });
+    });
 
     render().catch(error => {
       toast(error.message || 'تعذر تحميل الأرصدة.');
@@ -592,11 +545,7 @@
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      init,
-      { once: true }
-    );
+    document.addEventListener('DOMContentLoaded', init, { once: true });
   } else {
     init();
   }
